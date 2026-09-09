@@ -35,7 +35,8 @@ import {
 } from "lucide-react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, isToolUIPart } from "ai";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { createFollowupViaApi, listFollowupsViaApi, updateFollowupStatusViaApi } from "@/lib/client/backend-api";
 import { useModelHealth } from "@/hooks/use-model-health";
 import { useModelCatalog } from "@/hooks/use-model-catalog";
 import type { SalesAgentUIMessage } from "@/lib/ai/sales-agent";
@@ -45,12 +46,12 @@ import {
   analyzeCustomerMessage,
   buildFollowupMessage,
   filterFollowupTasks,
+  formatFollowupDate,
   formatQuoteAmount,
   getCustomerById,
   getLatestInboundMessage,
   isTaskOverdue,
   searchCustomers,
-  toggleFollowupTask,
   type CrmAsset,
   type Customer,
   type CustomerContact,
@@ -95,12 +96,12 @@ export type FollowupViewProps = {
   customers: Customer[];
   tasks: FollowupTask[];
   referenceDate?: Date | string;
+  timeZone?: string;
   onOpenCustomer?: (customerId: string) => void;
   onTaskStatusChange?: (task: FollowupTask, status: FollowupTaskStatus) => void;
   onToast?: CrmToastHandler;
 };
 
-const defaultReferenceDate = "2026-09-04T14:00:00+08:00";
 
 function cx(...names: Array<string | false | undefined>): string {
   return names.filter(Boolean).join(" ");
@@ -457,82 +458,112 @@ function CustomerProfile({ customer, onAnalyze, onToast }: { customer: Customer;
   );
 }
 
+
 const followupFilterLabels: Record<FollowupFilter, string> = { all: "全部任务", overdue: "已逾期", today: "今天", upcoming: "即将到期", completed: "已完成" };
 
-export function FollowupView({ customers, tasks, referenceDate = defaultReferenceDate, onOpenCustomer, onTaskStatusChange, onToast }: FollowupViewProps) {
+export function FollowupView({ customers, tasks, referenceDate, timeZone, onOpenCustomer, onTaskStatusChange, onToast }: FollowupViewProps) {
   const [taskState, setTaskState] = useState(tasks);
   const [filter, setFilter] = useState<FollowupFilter>("all");
   const [query, setQuery] = useState("");
-  const initialTask = taskState[0];
-  const [selectedTaskId, setSelectedTaskId] = useState(initialTask?.id ?? "");
-  const [script, setScript] = useState(() => initialTask ? buildFollowupMessage(initialTask, getCustomerById(initialTask.customerId, customers)) : "");
-  const filteredTasks = useMemo(() => filterFollowupTasks(taskState, filter, query, referenceDate), [filter, query, referenceDate, taskState]);
+  const [now, setNow] = useState<Date | null>(null);
+  const [zone, setZone] = useState(timeZone ?? "UTC");
+  const [selectedTaskId, setSelectedTaskId] = useState(tasks[0]?.id ?? "");
+  const [script, setScript] = useState(() => tasks[0] ? buildFollowupMessage(tasks[0], getCustomerById(tasks[0].customerId, customers)) : "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [creating, setCreating] = useState(false);
+  const effectiveDate = referenceDate ?? now;
+  const filteredTasks = useMemo(() => effectiveDate ? filterFollowupTasks(taskState, filter, query, effectiveDate, zone) : taskState, [filter, query, effectiveDate, zone, taskState]);
   const selectedTask = taskState.find((task) => task.id === selectedTaskId) ?? filteredTasks[0];
-  const overdueCount = taskState.filter((task) => isTaskOverdue(task, referenceDate)).length;
-  const openCount = taskState.filter((task) => task.status === "open").length;
-  const completedCount = taskState.filter((task) => task.status === "completed").length;
+  const overdue = (task: FollowupTask) => Boolean(effectiveDate && isTaskOverdue(task, effectiveDate));
+  const overdueCount = taskState.filter(overdue).length;
 
-  function selectTask(task: FollowupTask) {
-    setSelectedTaskId(task.id);
-    setScript(buildFollowupMessage(task, getCustomerById(task.customerId, customers)));
+  useEffect(() => {
+    let active = true;
+    void listFollowupsViaApi().then((records) => { if (active) setTaskState(records); }).catch((caught) => { if (active) setError(caught instanceof Error ? caught.message : "读取待办失败"); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const update = () => { setNow(new Date()); setZone(timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone); };
+    const first = window.setTimeout(update, 0);
+    const interval = window.setInterval(update, 60_000);
+    return () => { window.clearTimeout(first); window.clearInterval(interval); };
+  }, [timeZone]);
+
+  async function refreshTasks() {
+    setBusy(true); setError("");
+    try { setTaskState(await listFollowupsViaApi()); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : "读取待办失败"); }
+    finally { setBusy(false); }
   }
-
-  function changeStatus(task: FollowupTask, completed: boolean) {
-    const nextTasks = toggleFollowupTask(taskState, task.id, completed);
-    const nextTask = nextTasks.find((item) => item.id === task.id) ?? task;
-    setTaskState(nextTasks);
-    onTaskStatusChange?.(nextTask, nextTask.status);
-    onToast?.(completed ? "任务已完成" : "任务已重新打开");
+  function selectTask(task: FollowupTask) { setSelectedTaskId(task.id); setScript(buildFollowupMessage(task, getCustomerById(task.customerId, customers))); }
+  async function changeStatus(task: FollowupTask) {
+    setBusy(true); setError("");
+    try {
+      const updated = await updateFollowupStatusViaApi(task.id, task.status === "completed" ? "open" : "completed");
+      setTaskState((current) => current.map((item) => item.id === task.id ? updated : item));
+      onTaskStatusChange?.(updated, updated.status);
+      onToast?.(updated.status === "completed" ? "任务完成状态已保存到后端" : "任务已重新打开并保存");
+    } catch (caught) { setError(caught instanceof Error ? caught.message : "保存失败，任务状态未改变"); }
+    finally { setBusy(false); }
   }
+  const dateText = (value: string) => now || referenceDate ? formatFollowupDate(value, zone) : "正在读取本地日期…";
 
-  function completeSelected() {
-    if (selectedTask) changeStatus(selectedTask, selectedTask.status !== "completed");
-  }
-
-  function createTask() {
-    const customer = customers[0];
-    const task: FollowupTask = {
-      id: `task-local-${Date.now()}`,
-      customerId: customer.id,
-      customerName: customer.name,
-      company: customer.company,
-      title: "新跟进任务（待完善）",
-      description: "补充下一步动作、负责人和客户承诺边界。",
-      type: "回复客户",
-      priority: "中",
-      status: "open",
-      dueAt: "2026-09-04T18:30:00+08:00",
-      dueLabel: "今天 18:30",
-      createdAt: new Date().toISOString(),
-    };
-    setTaskState((current) => [task, ...current]);
-    setSelectedTaskId(task.id);
-    setScript(buildFollowupMessage(task, customer));
-    setFilter("all");
-    setQuery("");
-    onToast?.("新跟进任务已创建");
-  }
-
-  return (
-    <div className={styles.root} data-testid="followup-view">
-      <div className={styles.viewHeader}><div><span className={styles.eyebrow}>Follow-up · 二期</span><h1>不错过该推进的客户</h1><p>把未回复提醒、下一步行动、跟进话术和销售任务放在一个工作队列里。</p></div><button className={styles.primaryButton} onClick={createTask}><Plus size={16} /> 新建任务</button></div>
-      <div className={styles.metricStrip} aria-label="跟进指标"><Metric icon={AlertCircle} label="待处理任务" value={String(openCount).padStart(2, "0")} detail="含未回复提醒" tone="gold" /><Metric icon={Clock3} label="今日到期" value={String(filterFollowupTasks(taskState, "today", "", referenceDate).length).padStart(2, "0")} detail="优先处理" tone="rose" /><Metric icon={Flag} label="已逾期" value={String(overdueCount).padStart(2, "0")} detail="需要马上推进" tone="blue" /><Metric icon={CheckCircle2} label="本周完成" value={String(completedCount).padStart(2, "0")} detail="持续积累" tone="green" /></div>
-
-      <div className={styles.followupLayout}>
-        <section className={cx(styles.card, styles.taskBoard)}>
-          <div className={styles.listHeader}><div><span className={styles.sectionKicker}>Sales Todo List</span><h2>跟进待办 <em>{filteredTasks.length}</em></h2></div><button className={styles.iconButton} aria-label="刷新待办" onClick={() => setTaskState([...tasks])}><RefreshCw size={15} /></button></div>
-          <label className={styles.searchField}><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索客户、公司或任务" aria-label="搜索跟进任务" /></label>
-          <div className={styles.taskFilters}>{(Object.keys(followupFilterLabels) as FollowupFilter[]).map((key) => <button key={key} className={filter === key ? styles.filterActive : ""} onClick={() => setFilter(key)}>{followupFilterLabels[key]}{key === "overdue" && overdueCount > 0 && <b>{overdueCount}</b>}</button>)}</div>
-          <div className={styles.taskList}>{filteredTasks.length > 0 ? filteredTasks.map((task) => <TaskRow key={task.id} task={task} selected={selectedTask?.id === task.id} overdue={isTaskOverdue(task, referenceDate)} onSelect={() => selectTask(task)} onToggle={(completed) => changeStatus(task, completed)} />) : <EmptyPanel icon={CheckCircle2} title="这个筛选下没有任务" detail="可以切换筛选条件，或创建一条新的跟进任务。" />}</div>
-        </section>
-
-        {selectedTask ? <section className={cx(styles.card, styles.taskDetail)}><div className={styles.taskDetailHeader}><div><span className={styles.sectionKicker}>Selected task</span><h2>{selectedTask.title}</h2><p>{selectedTask.company} · {selectedTask.customerName}</p></div><PriorityBadge priority={selectedTask.priority} /></div><div className={styles.taskFacts}><div><CalendarClock size={15} /><span>截止时间<strong className={isTaskOverdue(selectedTask, referenceDate) ? styles.overdueText : ""}>{selectedTask.dueLabel}</strong></span></div><div><Tag size={15} /><span>任务类型<strong>{selectedTask.type}</strong></span></div></div><div className={styles.taskDescription}><span>任务说明</span><p>{selectedTask.description}</p></div><div className={styles.scriptBlock}><div className={styles.scriptHeader}><div><span className={styles.sectionKicker}>AI follow-up script</span><h3>建议跟进话术</h3></div><button className={styles.iconButton} aria-label="重新生成跟进话术" onClick={() => setScript(buildFollowupMessage(selectedTask, getCustomerById(selectedTask.customerId, customers)))}><RefreshCw size={15} /></button></div><textarea value={script} onChange={(event) => setScript(event.target.value)} aria-label="可编辑跟进话术" /><div className={styles.draftActions}><button className={styles.secondaryButton} onClick={() => copyText(script, onToast, "跟进话术已复制")}><Copy size={15} /> 复制话术</button><button className={styles.secondaryButton} onClick={() => onOpenCustomer?.(selectedTask.customerId)}><UsersRound size={15} /> 打开客户档案</button></div></div><div className={styles.taskDetailFooter}><button className={styles.secondaryButton} onClick={() => changeStatus(selectedTask, selectedTask.status === "completed")}><X size={15} /> {selectedTask.status === "completed" ? "重新打开" : "暂不处理"}</button><button className={styles.primaryButton} onClick={completeSelected}>{selectedTask.status === "completed" ? <RefreshCw size={15} /> : <CheckCircle2 size={15} />} {selectedTask.status === "completed" ? "标记为未完成" : "完成任务"}</button></div></section> : <section className={cx(styles.card, styles.taskDetail)}><EmptyPanel icon={Clock3} title="选择一条任务" detail="从任务队列选择后，这里会生成下一步话术。" /></section>}
-      </div>
+  return <div className={styles.root} data-testid="followup-view">
+    <div className={styles.viewHeader}><div><span className={styles.eyebrow}>Sales Todo List</span><h1>跟进待办</h1><p data-testid="followup-today">{effectiveDate ? formatFollowupDate(effectiveDate, zone, false) : "正在读取今天日期…"} · {zone}</p><p>任务与完成状态由后端持久保存；这里只管理待办，不会自动联系客户。</p></div><button className={styles.primaryButton} disabled={!customers.length || busy} onClick={() => setCreating(true)}><Plus size={16} />新建任务</button></div>
+    {error && <p role="alert">{error}</p>}
+    <div className={styles.metricStrip} aria-label="跟进指标">
+      <Metric icon={AlertCircle} label="待处理任务" value={String(taskState.filter((task) => task.status === "open").length)} detail="全部未完成" tone="gold" />
+      <Metric icon={Clock3} label="今日到期" value={String(effectiveDate ? filterFollowupTasks(taskState, "today", "", effectiveDate, zone).length : 0)} detail="按本地日期" tone="rose" />
+      <Metric icon={Flag} label="已逾期" value={String(overdueCount)} detail="截止时间已过" tone="blue" />
+      <Metric icon={CheckCircle2} label="已完成" value={String(taskState.filter((task) => task.status === "completed").length)} detail="所有已完成任务" tone="green" />
     </div>
-  );
+    <div className={styles.followupLayout}>
+      <section className={cx(styles.card, styles.taskBoard)}>
+        <div className={styles.listHeader}><h2>跟进待办 <em>{filteredTasks.length}</em></h2><button className={styles.iconButton} disabled={busy} aria-label="刷新待办" onClick={() => void refreshTasks()}><RefreshCw size={15} /></button></div>
+        <label className={styles.searchField}><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="搜索跟进任务" placeholder="搜索客户、公司或任务" /></label>
+        <div className={styles.taskFilters}>{(Object.keys(followupFilterLabels) as FollowupFilter[]).map((key) => <button key={key} className={filter === key ? styles.filterActive : ""} onClick={() => setFilter(key)}>{followupFilterLabels[key]}</button>)}</div>
+        <div className={styles.taskList}>{filteredTasks.map((task) => <div key={task.id} className={cx(styles.taskRow, selectedTask?.id === task.id && styles.taskRowSelected, task.status === "completed" && styles.taskRowCompleted, overdue(task) && styles.taskRowOverdue)}>
+          <button className={cx(styles.taskCheck, task.status === "completed" && styles.taskCheckDone)} disabled={busy} aria-label={(task.status === "completed" ? "重新打开 " : "完成 ") + task.title} aria-pressed={task.status === "completed"} onClick={() => void changeStatus(task)}>{task.status === "completed" && <Check size={13} />}</button>
+          <button className={styles.taskRowMain} onClick={() => selectTask(task)}><div className={styles.taskRowTop}><PriorityBadge priority={task.priority} /><span>{task.type}</span></div><strong>{task.title}</strong><p>{task.company} · {task.customerName}</p><time dateTime={task.dueAt} className={overdue(task) ? styles.overdueText : ""}>{dateText(task.dueAt)}</time></button>
+        </div>)}{!filteredTasks.length && <EmptyPanel icon={CheckCircle2} title="这个筛选下没有任务" detail="切换筛选或新建任务。" />}</div>
+      </section>
+      {selectedTask ? <section className={cx(styles.card, styles.taskDetail)}>
+        <div className={styles.taskDetailHeader}><div><h2>{selectedTask.title}</h2><p>{selectedTask.company} · {selectedTask.customerName}</p></div><PriorityBadge priority={selectedTask.priority} /></div>
+        <div className={styles.taskFacts}><div><CalendarClock size={15} /><span>截止日期与星期<strong><time dateTime={selectedTask.dueAt}>{dateText(selectedTask.dueAt)}</time></strong></span></div><div><Tag size={15} /><span>任务状态<strong>{selectedTask.status === "completed" ? "已完成" : overdue(selectedTask) ? "已逾期" : "待处理"}</strong></span></div></div>
+        <div className={styles.taskDescription}><p>{selectedTask.description}</p></div>
+        <div className={styles.scriptBlock}><div className={styles.scriptHeader}><h3>可编辑跟进话术（规则草稿）</h3><button className={styles.iconButton} aria-label="重新生成跟进话术" onClick={() => selectTask(selectedTask)}><RefreshCw size={15} /></button></div><textarea value={script} onChange={(event) => setScript(event.target.value)} aria-label="可编辑跟进话术" /><div className={styles.draftActions}><button className={styles.secondaryButton} onClick={() => void copyText(script, onToast, "跟进话术已复制")}><Copy size={15} />复制话术</button><button className={styles.secondaryButton} onClick={() => onOpenCustomer?.(selectedTask.customerId)}><UsersRound size={15} />打开客户档案</button></div></div>
+        <div className={styles.taskDetailFooter}><button className={styles.primaryButton} disabled={busy} onClick={() => void changeStatus(selectedTask)}><CheckCircle2 size={15} />{busy ? "保存中…" : selectedTask.status === "completed" ? "重新打开任务" : "完成任务"}</button></div>
+      </section> : <EmptyPanel icon={Clock3} title="选择一条任务" detail="从待办中选择或新建任务。" />}
+    </div>
+    {creating && <FollowupForm customers={customers} onClose={() => setCreating(false)} onCreated={(task) => { setTaskState((current) => [task, ...current]); selectTask(task); setFilter("all"); setQuery(""); setCreating(false); onToast?.("新任务已保存到后端"); }} />}
+  </div>;
 }
 
-function TaskRow({ task, selected, overdue, onSelect, onToggle }: { task: FollowupTask; selected: boolean; overdue: boolean; onSelect: () => void; onToggle: (completed: boolean) => void }) {
-  const completed = task.status === "completed";
-  return <div className={cx(styles.taskRow, selected && styles.taskRowSelected, completed && styles.taskRowCompleted, overdue && styles.taskRowOverdue)}><button className={cx(styles.taskCheck, completed && styles.taskCheckDone)} onClick={() => onToggle(!completed)} aria-label={completed ? `重新打开 ${task.title}` : `完成 ${task.title}`} aria-pressed={completed}>{completed && <Check size={13} />}</button><button className={styles.taskRowMain} onClick={onSelect}><div className={styles.taskRowTop}><PriorityBadge priority={task.priority} /><span className={styles.taskType}>{task.type}</span><time className={overdue ? styles.overdueText : ""}>{task.dueLabel}</time></div><strong>{task.title}</strong><p>{task.company} · {task.customerName}</p></button><ChevronRight size={15} className={styles.taskArrow} /></div>;
+function FollowupForm({ customers, onClose, onCreated }: { customers: Customer[]; onClose: () => void; onCreated: (task: FollowupTask) => void }) {
+  const [customerId, setCustomerId] = useState(customers[0]?.id ?? "");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [dueAt, setDueAt] = useState("");
+  const [priority, setPriority] = useState<FollowupTask["priority"]>("中");
+  const [type, setType] = useState<FollowupTask["type"]>("回复客户");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function submit(event: FormEvent) {
+    event.preventDefault(); setBusy(true); setError("");
+    try { onCreated(await createFollowupViaApi({ customerId, title: title.trim(), description, dueAt: new Date(dueAt).toISOString(), priority, type })); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : "创建失败"); }
+    finally { setBusy(false); }
+  }
+  return <div className={styles.todoModal} role="dialog" aria-modal="true" aria-label="新建跟进任务"><form onSubmit={submit} className={styles.todoForm}><h2>新建跟进任务</h2>
+    <label>客户<select value={customerId} onChange={(event) => setCustomerId(event.target.value)}>{customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.company} · {customer.name}</option>)}</select></label>
+    <label>任务标题<input required maxLength={240} value={title} onChange={(event) => setTitle(event.target.value)} /></label>
+    <label>截止日期与时间<input type="datetime-local" required value={dueAt} onChange={(event) => setDueAt(event.target.value)} /></label>
+    {dueAt && <p>{formatFollowupDate(new Date(dueAt))}</p>}
+    <label>任务类型<select value={type} onChange={(event) => setType(event.target.value as FollowupTask["type"])}>{["回复客户", "发送资料", "电话沟通", "确认需求", "报价跟进", "内部任务"].map((value) => <option key={value}>{value}</option>)}</select></label>
+    <label>优先级<select value={priority} onChange={(event) => setPriority(event.target.value as FollowupTask["priority"])}>{["高", "中", "低"].map((value) => <option key={value}>{value}</option>)}</select></label>
+    <label>任务说明<textarea value={description} maxLength={5000} onChange={(event) => setDescription(event.target.value)} /></label>
+    {error && <p role="alert">{error}</p>}<div><button type="button" className={styles.secondaryButton} disabled={busy} onClick={onClose}>取消</button><button className={styles.primaryButton} disabled={busy || !title.trim()}>{busy ? "保存中…" : "保存任务"}</button></div>
+  </form></div>;
 }

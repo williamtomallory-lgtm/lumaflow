@@ -268,3 +268,6 @@ kbd { padding: 3px 6px; font-family: inherit; font-size: 8px; border: 1px solid 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+.kit-message-editor { width: 100%; box-sizing: border-box; padding: 16px; border: 1px solid #dce5df; border-radius: 14px; background: white; color: #253b31; font: inherit; line-height: 1.8; resize: vertical; }
+.kit-preview.panel { padding: 24px; }
+.kit-actions { flex-wrap: wrap; }

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { followupTaskSchema, productSchema } from "../contracts/api";
+import { createFollowupSchema, followupTaskSchema, productSchema } from "../contracts/api";
 import type { Product } from "../catalog";
 import type { FollowupTaskStatus } from "../crm";
 
@@ -34,4 +34,17 @@ export async function createProductViaApi(product: Omit<Product, "id">) {
 export async function updateFollowupStatusViaApi(taskId: string, status: FollowupTaskStatus) {
   const payload = await requestJson(`/api/v1/followups/${encodeURIComponent(taskId)}`, { method: "PATCH", body: JSON.stringify({ status }) });
   return followupMutationResponseSchema.parse(payload).data;
+}
+
+export async function createFollowupViaApi(input: z.infer<typeof createFollowupSchema>) {
+  return followupMutationResponseSchema.parse(await requestJson("/api/v1/followups", { method: "POST", body: JSON.stringify(input) })).data;
+}
+
+export async function listFollowupsViaApi() {
+  const all = [];
+  for (let offset = 0; ; offset += 100) {
+    const page = z.object({ data: z.array(followupTaskSchema), meta: z.object({ total: z.number() }) }).parse(await requestJson(`/api/v1/followups?limit=100&offset=${offset}`, { method: "GET", cache: "no-store" }));
+    all.push(...page.data);
+    if (all.length >= page.meta.total || !page.data.length) return all;
+  }
 }

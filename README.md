@@ -5,6 +5,14 @@ LumaFlow 是一个本地优先的销售知识库与多 Agent 工作台。这个�
 - `frontend/`：Next.js 管理界面、知识库、智能搜索、销售助手与模型选择。
 - `backend/`：基于 CowAgent 的 Agent 运行时、个人微信与企业微信群通道、多实例路由、定时任务和记忆能力。
 
+## 当前可用功能
+
+- 知识库统一管理产品档案、销售资料和上传原件；销售资料包已作为知识库内部栏目，不再占用独立导航。
+- 销售资料包只打包用户明确选择的真实上传原件，同时生成可编辑话术、产品参数和附件清单；任何原件读取失败都会终止打包，避免生成看似完整的空资料包。
+- 跟进提醒采用待办列表，显示完整日期、星期、时间和本机时区；新建、完成与重新打开均通过后端保存。
+- PostgreSQL 可用时使用数据库；未配置 PostgreSQL 时，新增产品和跟进任务保存在被 Git 忽略的 `.local-data/business/records.json`，不会修改演示 JSON 种子。
+- 本机演示推理使用 Ollama `qwen3:8b`；模型、知识文件、微信凭据和业务数据不会提交到 GitHub。
+
 ## 本机端口
 
 - LumaFlow：`http://127.0.0.1:3000/?ui=agents-v2`
@@ -50,6 +58,8 @@ npm run build
 cd ..\backend
 .\.venv\Scripts\python.exe -m pytest -q tests/test_agent_admin.py tests/test_agent_registry.py tests/test_agent_routing.py tests/test_agent_web_management.py tests/test_channel_agent_types.py tests/test_channel_instances.py tests/test_multi_agent_runtime.py tests/test_web_channel_disconnect.py tests/test_weixin_credentials_path.py tests/test_weixin_attachments.py tests/test_lumaflow_primary_ui.py
 ```
+
+本次交付的逐项验收结果记录在 [`docs/verification-2026-09-09.md`](docs/verification-2026-09-09.md)。该报告会区分已通过、需要人工扫码以及当前仍未通过的检查。
 
 个人微信扫码登录表示一个真实微信账号接入一个 Agent 实例，并不会把多个软件 Agent 变成同一微信账号里的多个新好友。企业微信群 Agent 使用独立的企业微信机器人凭据。实际扫码与企业微信应用凭据必须由部署者本人提供。
 

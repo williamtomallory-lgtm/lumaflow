@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { followupTaskSchema, productSchema } from "../contracts/api";
 import { validateDataSnapshot, type AppDataSnapshot } from "../data-snapshot";
 import { getJsonDataSnapshot } from "./json-data";
+import { mutateLocalBusinessData, readLocalBusinessData } from "./local-business-store";
 import type { Product } from "../catalog";
 import type { FollowupTask, FollowupTaskStatus } from "../crm";
 
@@ -34,7 +35,13 @@ async function rows(pool: Pool, table: DataTable) {
 
 export async function getDataSnapshot(): Promise<AppDataSnapshot> {
   const pool = getPool();
-  if (!pool) return validateDataSnapshot(getJsonDataSnapshot());
+  if (!pool) {
+    const snapshot = getJsonDataSnapshot();
+    const local = await readLocalBusinessData();
+    snapshot.products = [...new Map([...snapshot.products, ...local.products].map((item) => [item.id, item])).values()];
+    snapshot.followupTasks = [...new Map([...snapshot.followupTasks, ...local.followups].map((item) => [item.id, item])).values()];
+    return validateDataSnapshot(snapshot);
+  }
 
   try {
     const [
@@ -128,8 +135,9 @@ async function inTransaction<T>(pool: Pool, operation: (client: PoolClient) => P
 }
 
 export async function createProduct(product: Product, requestId: string) {
-  const pool = requirePool();
   const parsed = productSchema.parse(product);
+  if (!getPool()) return mutateLocalBusinessData((data) => { data.products.push(parsed); return parsed; });
+  const pool = requirePool();
   return inTransaction(pool, async (client) => {
     await client.query("INSERT INTO products (id, data, updated_at) VALUES ($1, $2::jsonb, NOW())", [parsed.id, JSON.stringify(parsed)]);
     await insertAuditEvent(client, { action: "product.create", entityType: "product", entityId: parsed.id, requestId });
@@ -150,6 +158,13 @@ export async function updateProduct(productId: string, patch: Partial<Omit<Produ
 }
 
 export async function updateFollowupStatus(taskId: string, status: FollowupTaskStatus, requestId: string) {
+  if (!getPool()) return mutateLocalBusinessData((data) => {
+    const current = data.followups.find((task) => task.id === taskId) ?? getJsonDataSnapshot().followupTasks.find((task) => task.id === taskId);
+    if (!current) return null;
+    const updated = followupTaskSchema.parse({ ...current, status });
+    data.followups = [...data.followups.filter((task) => task.id !== taskId), updated];
+    return updated;
+  });
   const pool = requirePool();
   return inTransaction(pool, async (client) => {
     const current = await client.query<DataRow>("SELECT data FROM followup_tasks WHERE id = $1 FOR UPDATE", [taskId]);
@@ -162,6 +177,16 @@ export async function updateFollowupStatus(taskId: string, status: FollowupTaskS
     });
     await client.query("UPDATE followup_tasks SET data = $2::jsonb, updated_at = NOW() WHERE id = $1", [taskId, JSON.stringify(parsed)]);
     await insertAuditEvent(client, { action: "followup.status.update", entityType: "followup", entityId: parsed.id, requestId });
+    return parsed;
+  });
+}
+
+export async function createFollowup(task: FollowupTask, requestId: string) {
+  const parsed = followupTaskSchema.parse(task);
+  if (!getPool()) return mutateLocalBusinessData((data) => { data.followups.push(parsed); return parsed; });
+  return inTransaction(requirePool(), async (client) => {
+    await client.query("INSERT INTO followup_tasks (id, data, updated_at) VALUES ($1, $2::jsonb, NOW())", [parsed.id, JSON.stringify(parsed)]);
+    await insertAuditEvent(client, { action: "followup.create", entityType: "followup", entityId: parsed.id, requestId });
     return parsed;
   });
 }

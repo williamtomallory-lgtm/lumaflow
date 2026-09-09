@@ -33,6 +33,7 @@ import { useModelCatalog } from "@/hooks/use-model-catalog";
 import { useModelHealth } from "@/hooks/use-model-health";
 import styles from "./knowledge-hub.module.css";
 import { ModelRuntimeControls } from "./model-runtime-controls";
+import { SalesKit } from "./sales-kit";
 
 export type KnowledgeHubProps = {
   /** Seed entries remain visibly marked as demo knowledge and never mix into uploaded counts. */
@@ -41,6 +42,9 @@ export type KnowledgeHubProps = {
   assets?: Array<Asset & { productId: string; productName: string }>;
   dataSource?: DataSourceKind;
   initialQuery?: string;
+  section?: "library" | "kit";
+  onSectionChange?: (section: "library" | "kit") => void;
+  kitProductId?: string;
   onOpenProduct?: (product: Product) => void;
   onToast: (message: string) => void;
 };
@@ -117,7 +121,10 @@ function statusLabel(entry: KnowledgeEntry) {
   return "仅归档未理解";
 }
 
-export function KnowledgeHub({ initialEntries, products = [], assets = [], dataSource = "json", initialQuery = "", onOpenProduct, onToast }: KnowledgeHubProps) {
+export function KnowledgeHub({ initialEntries, products = [], assets = [], dataSource = "json", initialQuery = "", section: controlledSection, onSectionChange, kitProductId, onOpenProduct, onToast }: KnowledgeHubProps) {
+  const [localSection, setLocalSection] = useState<"library" | "kit">("library");
+  const section = controlledSection ?? localSection;
+  const changeSection = (next: "library" | "kit") => { setLocalSection(next); onSectionChange?.(next); };
   const [uploaded, setUploaded] = useState<KnowledgeEntry[]>([]);
   const [summary, setSummary] = useState<ReturnType<typeof emptySummary>>(emptySummary());
   const [loading, setLoading] = useState(true);
@@ -248,6 +255,12 @@ export function KnowledgeHub({ initialEntries, products = [], assets = [], dataS
 
   return (
     <div className={styles.knowledgeHub}>
+      <div className={styles.categoryTabs} role="tablist" aria-label="知识库栏目">
+        <button role="tab" aria-selected={section === "library"} className={section === "library" ? styles.activeTab : ""} onClick={() => changeSection("library")}>知识资料</button>
+        <button role="tab" aria-selected={section === "kit"} className={section === "kit" ? styles.activeTab : ""} onClick={() => changeSection("kit")}>销售资料包</button>
+      </div>
+      {section === "kit" && <SalesKit key={kitProductId} products={catalogProducts} entries={uploaded} initialProductId={kitProductId} onProduct={onOpenProduct} onToast={onToast} />}
+      <div hidden={section !== "library"}>
       <section className={styles.topPanel}>
         <div className={styles.topCopy}>
           <span className={styles.eyebrow}><Sparkles size={14} /> 本地知识资产</span>
@@ -321,14 +334,15 @@ export function KnowledgeHub({ initialEntries, products = [], assets = [], dataS
       <section className={styles.demoPanel}>
         <div className={styles.sectionHead}><div><span>JSON seed</span><h3>演示知识（不等于上传文件）</h3></div><span className={styles.demoBadge}>{demoEntries.length} 条演示</span></div>
         <p>这些条目来自项目初始 JSON 数据，只用于展示旧数据迁移前的内容；不会计入上方上传统计，也不会自动混入新文件分类结果。</p>
-        <DemoKnowledgeList entries={demoEntries} />
+        <DemoKnowledgeList entries={demoEntries.filter((entry) => (category === "全部" || entry.category === category) && (!normalizedQuery || `${entry.title} ${entry.summary} ${entry.demoContent}`.toLowerCase().includes(normalizedQuery)))} />
       </section>
-      {creatingProduct && <ProductKnowledgeForm dataSource={dataSource} onClose={() => setCreatingProduct(false)} onCreated={(product) => { setCatalogProducts((current) => [product, ...current]); setCreatingProduct(false); setCategory("产品档案"); setQuery(product.model); onToast(dataSource === "postgres" ? `${product.model} 已写入 PostgreSQL 并加入知识库` : `${product.model} 已加入当前知识库视图；JSON 种子未被修改`); }} />}
+      {creatingProduct && <ProductKnowledgeForm dataSource={dataSource} onClose={() => setCreatingProduct(false)} onCreated={(product) => { setCatalogProducts((current) => [product, ...current]); setCreatingProduct(false); setCategory("产品档案"); setQuery(product.model); onToast(dataSource === "postgres" ? `${product.model} 已写入 PostgreSQL 并加入知识库` : `${product.model} 已写入本地数据文件；JSON 种子未被修改`); }} />}
+      </div>
     </div>
   );
 }
 
-function ProductKnowledgeForm({ dataSource, onClose, onCreated }: { dataSource: DataSourceKind; onClose: () => void; onCreated: (product: Product) => void }) {
+function ProductKnowledgeForm({ onClose, onCreated }: { dataSource: DataSourceKind; onClose: () => void; onCreated: (product: Product) => void }) {
   const [form, setForm] = useState({ name: "", model: "", sku: "", category: "轨道灯", power: "18W", material: "压铸铝", dimensions: "", stock: "0", price: "299" });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -346,13 +360,9 @@ function ProductKnowledgeForm({ dataSource, onClose, onCreated }: { dataSource: 
     if (!draft.name || !draft.model || !draft.sku) return;
     setSaving(true); setError("");
     try {
-      if (dataSource === "postgres") {
-        const { id: _temporaryId, ...input } = draft;
-        void _temporaryId;
-        onCreated(await createProductViaApi(input));
-      } else {
-        onCreated(draft);
-      }
+      const { id: _temporaryId, ...input } = draft;
+      void _temporaryId;
+      onCreated(await createProductViaApi(input));
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "保存产品失败");
     } finally {

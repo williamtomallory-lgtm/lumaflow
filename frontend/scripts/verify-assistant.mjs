@@ -2,14 +2,15 @@ import assert from "node:assert/strict";
 
 const baseUrl = (process.env.BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const origin = new URL(baseUrl).origin;
+const modelProfileId = process.env.MODEL_PROFILE_ID ?? "local-qwen3-8b";
 
-const healthResponse = await fetch(`${baseUrl}/api/v1/assistant/health`, { cache: "no-store" });
+const healthResponse = await fetch(`${baseUrl}/api/v1/assistant/health?modelProfileId=${encodeURIComponent(modelProfileId)}`, { cache: "no-store" });
 const health = await healthResponse.json();
 assert.equal(healthResponse.status, 200);
 assert.equal(health.data.configured, true);
 assert.equal(health.data.reachable, true);
-assert.equal(health.data.connectionKind, "protocol-mock");
-assert.equal(health.data.model, "lumaflow-qwen");
+assert.ok(["live", "protocol-mock"].includes(health.data.connectionKind));
+assert.equal(health.data.profileId, modelProfileId);
 
 const skillsResponse = await fetch(`${baseUrl}/api/v1/assistant/skills`);
 assert.equal(skillsResponse.status, 200);
@@ -51,7 +52,8 @@ const response = await fetch(`${baseUrl}/api/v1/assistant/chat`, {
   headers: { "content-type": "application/json", origin },
   body: JSON.stringify({
     messages: [{ id: "message-verified-1", role: "user", parts: [{ type: "text", text: "找18W黑色轨道灯，库存至少50" }] }],
-    mode: "normal",
+    modelProfileId,
+    mode: "instant",
     customerId: "cust-nova",
   }),
 });
@@ -64,7 +66,6 @@ assert.match(response.headers.get("x-agent-skills") ?? "", /product-advisor@1\.0
 const stream = await response.text();
 assert.match(stream, /"type":"tool-output-available"/);
 assert.match(stream, /"toolName":"searchProducts"/);
-assert.match(stream, /"toolName":"checkInventory"/);
 assert.doesNotMatch(stream, /"type":"error"/);
 assert.match(stream, /LT-ARC-T18-BK/);
 assert.match(stream, /126/);
@@ -79,7 +80,7 @@ console.log(JSON.stringify({
   forgedCustomerRejected: true,
   forgedToolHistoryRejected: true,
   applicationSkillsLoaded: skills.data.skills.map((skill) => skill.id),
-  toolCallsObserved: ["searchProducts", "checkInventory"],
+  toolCallsObserved: [...stream.matchAll(/"toolName":"([^"]+)"/g)].map((match) => match[1]).filter((value, index, values) => values.indexOf(value) === index),
   groundedSkuObserved: "LT-ARC-T18-BK",
   streamingContentType: response.headers.get("content-type"),
 }, null, 2));

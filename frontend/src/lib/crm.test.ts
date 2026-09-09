@@ -3,6 +3,7 @@ import {
   analyzeCustomerMessage,
   buildFollowupMessage,
   filterFollowupTasks,
+  formatFollowupDate,
   getLatestInboundMessage,
   isTaskOverdue,
   recommendAssetsForProducts,
@@ -74,10 +75,17 @@ describe("CRM customer records", () => {
 });
 
 describe("CRM follow-up queue", () => {
+  it("displays the full date and weekday in the viewer timezone", () => {
+    expect(formatFollowupDate("2026-09-09T00:30:00+08:00", "Asia/Shanghai")).toContain("2026年9月9日星期三");
+    expect(formatFollowupDate("2026-09-09T00:30:00+08:00", "America/Toronto")).toContain("2026年9月8日星期二");
+    expect(formatFollowupDate("invalid")).toBe("截止日期未设置");
+    const task = { ...followupTasks[0], dueAt: "2026-09-09T00:30:00+08:00", status: "open" as const };
+    expect(filterFollowupTasks([task], "today", "", "2026-09-08T17:00:00Z", "America/Toronto")).toHaveLength(1);
+  });
   it("filters overdue, today, upcoming and completed tasks deterministically", () => {
     expect(filterFollowupTasks(followupTasks, "overdue", "", referenceDate).map((task) => task.id)).toEqual(["task-nova-quote"]);
-    expect(filterFollowupTasks(followupTasks, "today", "", referenceDate).map((task) => task.id)).toEqual(["task-nova-reply", "task-northstar-need"]);
-    expect(filterFollowupTasks(followupTasks, "upcoming", "", referenceDate).map((task) => task.id)).toEqual(["task-atelier-assets", "task-moss-stock"]);
+    expect(filterFollowupTasks(followupTasks, "today", "", referenceDate, "Asia/Shanghai").map((task) => task.id)).toEqual(["task-nova-reply", "task-northstar-need"]);
+    expect(filterFollowupTasks(followupTasks, "upcoming", "", referenceDate, "Asia/Shanghai").map((task) => task.id)).toEqual(["task-atelier-assets", "task-moss-stock"]);
     expect(filterFollowupTasks(followupTasks, "completed", "", referenceDate).map((task) => task.id)).toEqual(["task-atelier-call"]);
   });
 

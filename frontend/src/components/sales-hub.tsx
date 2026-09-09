@@ -1,20 +1,15 @@
 "use client";
 
 import {
-  ArrowLeft,
   ArrowRight,
   Bot,
   BellRing,
   BookOpen,
   Box,
   BriefcaseBusiness,
-  Check,
   CheckCircle2,
-  ChevronDown,
   ChevronRight,
   Clock3,
-  Copy,
-  Download,
   FileText,
   Inbox,
   Menu,
@@ -23,9 +18,7 @@ import {
   RefreshCw,
   Search,
   ScanSearch,
-  Send,
   Settings,
-  ShieldCheck,
   UsersRound,
   X,
   Zap,
@@ -37,7 +30,6 @@ import { useBackendData } from "@/hooks/use-backend-data";
 import type { DashboardSummary } from "@/lib/contracts/api";
 import type { AppDataSnapshot } from "@/lib/data-snapshot";
 import type { Product } from "@/lib/catalog";
-import { buildSalesMessage } from "@/lib/search";
 import type { Customer } from "@/lib/crm";
 import { CustomersView, FollowupView } from "./crm-views";
 import { KnowledgeHub as KnowledgeBaseView } from "./knowledge-hub";
@@ -50,7 +42,6 @@ const navIcons: Record<View, LucideIcon> = {
   knowledge: BookOpen,
   agents: Bot,
   assistant: ScanSearch,
-  kit: BriefcaseBusiness,
   salesAssistant: MessageCircleMore,
   customers: UsersRound,
   followup: Clock3,
@@ -78,7 +69,8 @@ function SalesHubWorkspace({ initialData, dashboard, generatedAt, refreshing, on
   const [knowledgeSearchVersion, setKnowledgeSearchVersion] = useState(0);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [kitProductId, setKitProductId] = useState(catalog[0].id);
+  const [knowledgeSection, setKnowledgeSection] = useState<"library" | "kit">("library");
+  const [kitProductId, setKitProductId] = useState(catalog[0]?.id ?? "");
   const [crmCustomerId, setCrmCustomerId] = useState<string>();
   const [crmAnalysisMessage, setCrmAnalysisMessage] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -97,9 +89,16 @@ function SalesHubWorkspace({ initialData, dashboard, generatedAt, refreshing, on
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function openSalesKit(id?: string) {
+    if (id) setKitProductId(id);
+    setKnowledgeSection("kit");
+    navigate("knowledge");
+  }
+
   function runGlobalSearch() {
     if (!globalQuery.trim()) return;
     setView("knowledge");
+    setKnowledgeSection("library");
     setKnowledgeSearchVersion((current) => current + 1);
   }
 
@@ -161,7 +160,7 @@ function SalesHubWorkspace({ initialData, dashboard, generatedAt, refreshing, on
           <div className="topbar-actions">
             <button className="data-source-button" data-testid="data-source" onClick={onRefresh} disabled={refreshing} title={`最后同步：${new Date(generatedAt).toLocaleString("zh-CN")}`}><span />动态数据 · {sourceLabel} <RefreshCw size={13} className={refreshing ? "spinning" : ""} /></button>
             {!isChat && <button className="icon-button notification-button" aria-label="消息" aria-expanded={notificationsOpen} onClick={() => setNotificationsOpen((open) => !open)}><Inbox size={19} /><span /></button>}
-            {!isChat && <button className="primary-button compact" onClick={() => navigate("kit")}><Plus size={17} /> 新建资料包</button>}
+            {!isChat && <button className="primary-button compact" onClick={() => openSalesKit()}><Plus size={17} /> 新建资料包</button>}
           </div>
         </header>
 
@@ -170,17 +169,16 @@ function SalesHubWorkspace({ initialData, dashboard, generatedAt, refreshing, on
             <div><span className="eyebrow">{meta.eyebrow}</span><h1>{meta.title}</h1><p>{meta.subtitle}</p></div>
           </div>}
 
-          {view === "knowledge" && <KnowledgeBaseView key={`knowledge-${knowledgeSearchVersion}`} initialEntries={initialData.knowledgeEntries} products={catalog} assets={catalogAssets} dataSource={initialData.source} initialQuery={globalQuery} onOpenProduct={setSelectedProduct} onToast={showToast} />}
+          {view === "knowledge" && <KnowledgeBaseView key={`knowledge-${knowledgeSearchVersion}`} initialEntries={initialData.knowledgeEntries} products={catalog} assets={catalogAssets} dataSource={initialData.source} initialQuery={globalQuery} section={knowledgeSection} onSectionChange={setKnowledgeSection} kitProductId={kitProductId} onOpenProduct={setSelectedProduct} onToast={showToast} />}
           {view === "agents" && <AgentManagement onToast={showToast} />}
-          {isChat && <AgentWorkspace key={view} products={catalog} assets={catalogAssets} customers={initialData.customers} initialExperience={view === "salesAssistant" ? "work" : "chat"} initialMessage={view === "salesAssistant" ? crmAnalysisMessage : globalQuery} initialCustomerId={view === "salesAssistant" ? crmCustomerId : undefined} preferredRoleId={view === "salesAssistant" ? "sales-review" : undefined} selectAllKnowledge={view === "salesAssistant"} onOpenProduct={setSelectedProduct} onOpenCustomer={(id) => { setCrmCustomerId(id); navigate("customers"); }} onOpenKnowledge={() => navigate("knowledge")} onToast={showToast} onAddToKit={(id) => { setKitProductId(id); navigate("kit"); }} />}
-          {view === "kit" && <SalesKitView products={catalog} initialProductId={kitProductId} onProduct={setSelectedProduct} onToast={showToast} />}
+          {isChat && <AgentWorkspace key={view} products={catalog} assets={catalogAssets} customers={initialData.customers} initialExperience={view === "salesAssistant" ? "work" : "chat"} initialMessage={view === "salesAssistant" ? crmAnalysisMessage : globalQuery} initialCustomerId={view === "salesAssistant" ? crmCustomerId : undefined} preferredRoleId={view === "salesAssistant" ? "sales-review" : undefined} selectAllKnowledge={view === "salesAssistant"} onOpenProduct={setSelectedProduct} onOpenCustomer={(id) => { setCrmCustomerId(id); navigate("customers"); }} onOpenKnowledge={() => navigate("knowledge")} onToast={showToast} onAddToKit={openSalesKit} />}
           {view === "customers" && <CustomersView customers={initialData.customers} initialCustomerId={crmCustomerId} onOpenCustomer={setCrmCustomerId} onAnalyzeCustomer={(customer) => { setCrmCustomerId(customer.id); setCrmAnalysisMessage(buildCustomerReviewPrompt(customer)); navigate("salesAssistant"); }} onToast={showToast} />}
           {view === "followup" && <FollowupView customers={initialData.customers} tasks={initialData.followupTasks} onOpenCustomer={(id) => { setCrmCustomerId(id); navigate("customers"); }} onToast={showToast} />}
         </section>
       </main>
 
       {notificationsOpen && <div className="notification-popover"><div><BellRing size={16} /><strong>{notificationCount} 条后端提醒</strong><button onClick={() => setNotificationsOpen(false)} aria-label="关闭通知"><X size={15} /></button></div>{openFollowup && <button onClick={() => { setNotificationsOpen(false); navigate("followup"); }}><span className="notification-dot urgent" /><p><strong>{openFollowup.company} · {openFollowup.title}</strong><small>{openFollowup.dueLabel}</small></p><ChevronRight size={14} /></button>}{qualityIssue && <button onClick={() => { setNotificationsOpen(false); navigate("knowledge"); }}><span className="notification-dot warn" /><p><strong>{qualityIssue.subject}</strong><small>{qualityIssue.severity}优先 · {qualityIssue.detail}</small></p><ChevronRight size={14} /></button>}</div>}
-      {selectedProduct && <ProductDrawer products={catalog} product={selectedProduct} onClose={() => setSelectedProduct(null)} onBuildKit={() => { setKitProductId(selectedProduct.id); setSelectedProduct(null); navigate("kit"); }} onAsk={() => { setGlobalQuery(`${selectedProduct.model} 有哪些参数和适用场景？`); setSelectedProduct(null); navigate("assistant"); }} />}
+      {selectedProduct && <ProductDrawer products={catalog} product={selectedProduct} onClose={() => setSelectedProduct(null)} onBuildKit={() => openSalesKit(selectedProduct.id)} onAsk={() => { setGlobalQuery(`${selectedProduct.model} 有哪些参数和适用场景？`); setSelectedProduct(null); navigate("assistant"); }} />}
       <div className={`toast ${toast ? "toast-visible" : ""}`} role="status"><CheckCircle2 size={17} /> {toast}</div>
     </div>
   );
@@ -212,94 +210,6 @@ function ProductArt({ product, large = false }: { product: Product; large?: bool
       <span className="art-label">{product.category}</span>
       <span className="art-model">{product.model}</span>
       <div className="art-shine" style={{ background: product.accent }} />
-    </div>
-  );
-}
-
-function SalesKitView({ products, initialProductId, onProduct, onToast }: { products: Product[]; initialProductId: string; onProduct: (product: Product) => void; onToast: (message: string) => void }) {
-  const [productId, setProductId] = useState(initialProductId);
-  const product = products.find((item) => item.id === productId) ?? products[0];
-  const [selectedAssets, setSelectedAssets] = useState<string[]>(product.assets.map((asset) => asset.id));
-  const [sendMethod, setSendMethod] = useState<"share" | "download">("share");
-  const message = buildSalesMessage(product);
-
-  function changeProduct(id: string) {
-    const next = products.find((item) => item.id === id) ?? products[0];
-    setProductId(id);
-    setSelectedAssets(next.assets.map((asset) => asset.id));
-  }
-
-  async function copyMessage() {
-    await navigator.clipboard.writeText(message);
-    onToast("推荐话术已复制");
-  }
-
-  async function downloadPackage() {
-    const { default: JSZip } = await import("jszip");
-    const assets = product.assets.filter((asset) => selectedAssets.includes(asset.id));
-    const zip = new JSZip();
-    zip.file("01-客户推荐话术.txt", message);
-    zip.file("02-产品参数.csv", `字段,内容\n产品,${product.name}\n型号,${product.model}\nSKU,${product.sku}\n功率,${product.power}\n光通量,${product.lumens}\n色温,${product.colorTemp}\n材质,${product.material}\n尺寸,${product.dimensions}\n颜色,${product.colors.join("、")}\n场景,${product.scenarios.join("、")}\n报价区间,${product.priceRange}\n质保,${product.warranty}`);
-    zip.file("03-附件清单.txt", assets.map((asset, index) => `${index + 1}. ${asset.name}（${asset.type}，${asset.size}，${asset.version ?? "v1.0"}）`).join("\n"));
-    zip.file("README.txt", "本压缩包由 LumaFlow 生成。当前演示目录保存附件清单与结构化产品参数；接入企业对象存储后，将把已审核的图片、PDF、证书和视频原件一并打包。正式报价请以 CPQ 审批版本为准。\n");
-    const blob = await zip.generateAsync({ type: "blob" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${product.model}-销售资料包.zip`;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-    onToast("销售资料包 ZIP 已下载");
-  }
-
-  async function sharePackage() {
-    if (navigator.share) {
-      await navigator.share({ title: `${product.name} 销售资料`, text: message });
-      onToast("系统分享面板已打开");
-      return;
-    }
-    await navigator.clipboard.writeText(message);
-    onToast("当前浏览器不支持系统分享，话术已复制");
-  }
-
-  return (
-    <div className="kit-layout">
-      <section className="kit-builder panel">
-        <div className="step-head"><span>01</span><div><h2>选择产品</h2><p>资料与话术会随产品自动更新</p></div></div>
-        <div className="select-wrap"><select value={productId} onChange={(event) => changeProduct(event.target.value)} aria-label="选择产品">{products.map((item) => <option value={item.id} key={item.id}>{item.name} · {item.model}</option>)}</select><ChevronDown size={17} /></div>
-        <button className="selected-product-row" onClick={() => onProduct(product)}><ProductArt product={product} /><span><small>{product.category}</small><strong>{product.name}</strong><em>{product.sku}</em></span><ChevronRight size={18} /></button>
-
-        <div className="step-divider" />
-        <div className="step-head"><span>02</span><div><h2>选择附件</h2><p>已按推荐优先级排序</p></div><em>{selectedAssets.length}/{product.assets.length} 已选</em></div>
-        <div className="kit-assets">
-          {product.assets.map((asset, index) => {
-            const checked = selectedAssets.includes(asset.id);
-            return <label key={asset.id} className={checked ? "selected" : ""}><input type="checkbox" checked={checked} onChange={() => setSelectedAssets((current) => checked ? current.filter((id) => id !== asset.id) : [...current, asset.id])} /><span className="custom-check">{checked && <Check size={13} />}</span><span className="kit-file-icon"><FileText size={17} /></span><span><strong>{asset.name}</strong><small>{asset.type} · {asset.size}</small></span>{index < 2 && <em>推荐</em>}</label>;
-          })}
-        </div>
-
-        <div className="step-divider" />
-        <div className="step-head"><span>03</span><div><h2>发送方式</h2><p>调用系统分享，或下载完整结构化 ZIP</p></div></div>
-        <div className="send-options"><button className={sendMethod === "share" ? "selected" : ""} onClick={() => setSendMethod("share")}><Send size={18} /><span><strong>一键分享</strong><small>微信 / 邮件 / 系统应用</small></span>{sendMethod === "share" && <CheckCircle2 size={16} />}</button><button className={sendMethod === "download" ? "selected" : ""} onClick={() => setSendMethod("download")}><Download size={18} /><span><strong>下载资料包</strong><small>生成参数、话术与清单</small></span>{sendMethod === "download" && <CheckCircle2 size={16} />}</button></div>
-      </section>
-
-      <aside className="kit-preview">
-        <div className="preview-head"><div><span>实时预览</span><strong>客户将看到的内容</strong></div><span className="live-dot">已同步</span></div>
-        <div className="phone-preview">
-          <div className="phone-bar"><ArrowLeft size={17} /><span><strong>客户 · 陈经理</strong><small>在线</small></span><span className="phone-dots">•••</span></div>
-          <div className="preview-chat">
-            <div className="preview-time">14:26</div>
-            <div className="preview-bubble">{message}</div>
-            <div className="preview-files">
-              {product.assets.filter((asset) => selectedAssets.includes(asset.id)).map((asset) => <div key={asset.id}><span><FileText size={16} /></span><p><strong>{asset.name}</strong><small>{asset.size}</small></p><CheckCircle2 size={15} /></div>)}
-            </div>
-          </div>
-        </div>
-        <div className="kit-actions"><button className="outline-button" onClick={copyMessage}><Copy size={16} /> 复制话术</button><button className="primary-button" onClick={sendMethod === "share" ? sharePackage : downloadPackage}>{sendMethod === "share" ? <Send size={16} /> : <Download size={16} />} {sendMethod === "share" ? "一键分享" : "下载 ZIP"}</button></div>
-        <p className="kit-footnote"><ShieldCheck size={14} /> 报价为参考区间，发送正式报价前需进入审批流程。</p>
-      </aside>
     </div>
   );
 }

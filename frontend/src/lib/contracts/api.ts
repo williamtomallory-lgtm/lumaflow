@@ -231,6 +231,7 @@ export type BootstrapResponse = z.infer<typeof bootstrapResponseSchema>;
 export const createProductSchema = productSchema.omit({ id: true });
 export const updateProductSchema = productSchema.omit({ id: true }).partial().refine((value) => Object.keys(value).length > 0, "At least one field is required");
 export const updateFollowupSchema = z.object({ status: z.enum(["open", "completed"]) }).strict();
+export const createFollowupSchema = followupTaskSchema.pick({ customerId: true, title: true, description: true, type: true, priority: true }).extend({ dueAt: z.string().datetime({ offset: true }) }).strict();
 
 export const listQuerySchema = z.object({
   q: z.string().trim().max(200).default(""),

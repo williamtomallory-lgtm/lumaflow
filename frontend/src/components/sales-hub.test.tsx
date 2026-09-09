@@ -17,7 +17,7 @@ vi.mock("./agent-workspace", () => ({
   AgentWorkspace: (props: { initialExperience: string; initialCustomerId?: string; initialMessage?: string; preferredRoleId?: string; selectAllKnowledge?: boolean; onOpenKnowledge: () => void }) => <div data-testid="unified-chat" data-role={props.preferredRoleId} data-all-knowledge={String(props.selectAllKnowledge)}>{props.initialExperience}<span>{props.initialCustomerId}</span><span>{props.initialMessage}</span><button onClick={props.onOpenKnowledge}>归档资料</button></div>,
 }));
 vi.mock("./knowledge-hub", () => ({
-  KnowledgeHub: () => <div data-testid="knowledge-destination">文件归档模块</div>,
+  KnowledgeHub: (props: { section?: string }) => <div data-testid="knowledge-destination" data-section={props.section}>文件归档模块</div>,
 }));
 beforeEach(() => { vi.stubGlobal("scrollTo", vi.fn()); });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
@@ -38,11 +38,17 @@ describe("unified Chat-AI navigation", () => {
     render(<SalesHub />);
     const navigation = within(screen.getByLabelText("主导航"));
     expect(navigation.getAllByRole("button", { name: /Chat-AI/ })).toHaveLength(1);
-    for (const removed of ["工作台", "产品中心", "资料中心", "报价系统", "管理后台"]) expect(navigation.queryByRole("button", { name: removed })).not.toBeInTheDocument();
+    for (const removed of ["工作台", "产品中心", "资料中心", "销售资料包", "报价系统", "管理后台"]) expect(navigation.queryByRole("button", { name: removed })).not.toBeInTheDocument();
     expect(screen.queryByTestId("unified-chat")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "所有销售知识，一个入口管理" })).toBeInTheDocument();
     expect(screen.getByTestId("knowledge-destination")).toBeInTheDocument();
     fireEvent.click(navigation.getByRole("button", { name: /Chat-AI/ }));
     expect(screen.getByTestId("unified-chat")).toHaveTextContent("chat");
+  });
+  it("opens a new sales kit inside the knowledge page", () => {
+    render(<SalesHub />);
+    fireEvent.click(screen.getByRole("button", { name: "新建资料包" }));
+    expect(screen.getByTestId("knowledge-destination")).toHaveAttribute("data-section", "kit");
+    expect(screen.getByRole("heading", { name: "所有销售知识，一个入口管理" })).toBeInTheDocument();
   });
 });
