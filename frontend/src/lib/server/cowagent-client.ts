@@ -223,6 +223,29 @@ export async function createCowAgentProfile(input: {
   return getCowAgentRoster();
 }
 
+export async function deleteCowAgentProfile(input: { id: string; revision?: string }): Promise<CowAgentRoster> {
+  const payload = await cowAgentJson("api/agents", {
+    method: "POST",
+    headers: cowAgentHeaders(true),
+    body: JSON.stringify({
+      action: "delete",
+      id: input.id,
+      ...(input.revision ? { revision: input.revision } : {}),
+    }),
+  }, 30_000);
+  if (payload.status !== "success") {
+    const message = asString(payload.message);
+    const status = payload.code === "stale_roster" ? 409 : /default/i.test(message) ? 409 : 422;
+    const publicMessage = payload.code === "stale_roster"
+      ? "智能体列表已变化，请刷新后重试。"
+      : /default/i.test(message)
+        ? "默认智能体不能删除。"
+        : "CowAgent 删除智能体失败。";
+    throw new ApiHttpError(status, "COWAGENT_DELETE_FAILED", publicMessage);
+  }
+  return getCowAgentRoster();
+}
+
 export async function uploadCowAgentAvatar(agentId: string, file: File): Promise<void> {
   try {
     const boundary = `lumaflow-${randomUUID()}`;

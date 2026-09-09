@@ -43,6 +43,10 @@
 .profileFields > div:first-child,.profileFields > div:last-child { grid-column:1/-1; }
 .profileFields dt { margin-bottom:7px; color:#7d8a83; font-size:9px; font-weight:700; }
 .profileFields dd { margin:0; color:#35493e; font-size:11px; line-height:1.65; overflow-wrap:anywhere; }
+.detailActions { display:flex; align-items:center; gap:9px; flex-wrap:wrap; }
+.danger { display:inline-flex; align-items:center; justify-content:center; gap:7px; min-height:39px; padding:0 14px; border:1px solid #e6bdb7; border-radius:10px; color:#a2382d; background:#fff7f5; cursor:pointer; font:inherit; font-size:11px; font-weight:700; }
+.danger:hover { border-color:#d8978e; background:#fff0ed; }
+.danger:disabled { opacity:.5; cursor:not-allowed; }
 .monospace { font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:9px !important; }
 .channelNotice { display:flex; flex-direction:column; gap:5px; margin-bottom:16px; padding:13px 14px; border:1px solid #ead8b7; border-radius:11px; color:#765622; background:#fffaf0; }
 .channelNotice strong { font-size:11px; }
@@ -51,6 +55,7 @@
 .bindingCard > div:nth-child(2) { min-width:0; flex:1; }
 .bindingCard strong { color:#2b4437; font-size:12px; }
 .bindingCard p { margin:5px 0 0; color:#77867e; font-size:9px; line-height:1.5; }
+.channelActions { display:flex; justify-content:flex-end; margin-top:16px; padding-top:16px; border-top:1px solid #e7ece9; }
 .channelIcon { width:42px; height:42px; display:grid; place-items:center; flex:none; border-radius:12px; color:#1d6847; background:#e5f2e9; }
 .grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }
 .card { min-height:190px; display:flex; flex-direction:column; gap:13px; padding:18px; border:1px solid #e0e6e2; border-radius:15px; background:#fff; box-shadow:0 8px 25px #253d3009; }

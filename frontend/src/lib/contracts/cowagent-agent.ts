@@ -14,6 +14,11 @@ export const cowAgentCreateSchema = z.object({
   revision: z.string().max(200).optional(),
 }).strict();
 
+export const cowAgentDeleteSchema = z.object({
+  id: cowAgentIdSchema,
+  revision: z.string().max(200).optional(),
+}).strict();
+
 export type CowAgentProfile = {
   id: string;
   name: string;

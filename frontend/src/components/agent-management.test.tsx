@@ -26,6 +26,25 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("unified Agent management", () => {
+  it("deletes a non-default Agent through CowAgent after confirmation", async () => {
+    const molly = { id: "molly", name: "Molly", description: "销售助手", enabled: true, workspace: "agents/molly", knowledgeMode: "own" as const };
+    vi.stubGlobal("confirm", vi.fn(() => true));
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === "DELETE") return Response.json({ data: { agents: baseAgents, defaultAgentId: "default", revision: "r3" } });
+      return Response.json({ data: { agents: [...baseAgents, molly], defaultAgentId: "default", revision: "r2" } });
+    }));
+
+    render(<AgentManagement />);
+    fireEvent.click(await screen.findByRole("button", { name: /Molly/ }));
+    fireEvent.click(screen.getByRole("button", { name: "删除 Agent" }));
+
+    await waitFor(() => expect(screen.queryByText("Molly")).not.toBeInTheDocument());
+    expect(confirm).toHaveBeenCalledOnce();
+    const deletion = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(([, init]) => init?.method === "DELETE");
+    expect(JSON.parse(String(deletion?.[1]?.body))).toEqual({ id: "molly", revision: "r2" });
+    expect(screen.queryByRole("button", { name: "删除 Agent" })).not.toBeInTheDocument();
+  });
+
   it("creates in CowAgent, switches to the same WeChat roster, and starts the new personal QR", async () => {
     render(<AgentManagement />);
     await screen.findByRole("region", { name: "后端 Agent 名单" });
