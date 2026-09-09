@@ -213,7 +213,7 @@ export function AgentWorkspace({
   const [agentError, setAgentError] = useState("");
   const [contextOpen, setContextOpen] = useState(false);
   const [input, setInput] = useState(initialMessage ?? "");
-  // Do not silently attach an arbitrary demo customer to a free-form chat.
+  // Do not silently attach an arbitrary customer to a free-form chat.
   // A customer context is sent only when the caller or user explicitly picks it.
   const initialCustomer = initialCustomerId ? customers.find((customer) => customer.id === initialCustomerId) : undefined;
   const [customerId, setCustomerId] = useState(initialCustomer?.id ?? "");
@@ -539,7 +539,6 @@ export function AgentWorkspace({
             <div className={styles.answerHeading}><span className={styles.answerMark}><Sparkles size={16} /></span><strong>{experience === "chat" ? "LumaFlow" : role.name}</strong><span className={styles.outputStatus}>{busy ? <><Clock3 size={12} /> {elapsed} 秒</> : cancelled ? "已停止 · 内容可能不完整" : exhausted ? "预算已用尽 · 答案可能不完整" : result.text ? confirmed ? "已人工核对" : "待人工核对" : ""}</span></div>
             {busy && <p className={styles.generating} role="status">{toolParts.length ? `已观察到 ${toolParts.length} 次真实工具调用，正在整理…` : "正在等待本地模型，首次加载可能需要一些时间…"}</p>}
             {result.text && <div className={styles.answer} data-testid="agent-answer">{result.text}</div>}
-            {result.sources.some((source) => source === "json" || source === "json-fallback") && <p className={styles.muted}>本轮使用 JSON 演示数据，不能作为正式库存或报价依据。</p>}
             {!busy && !error && !result.text && <p className={styles.muted}>{cancelled ? "本次生成已停止。" : "模型没有返回文字输出；不会使用本地规则冒充回答。"}</p>}
             {exhausted && <p className={styles.errorBox} role="alert">本轮生成预算已用尽，答案可能不完整。请缩小任务范围或调整档位后重试。</p>}
             {error && <div className={styles.errorBox} role="alert"><span>模型没有完成本轮任务：{error.message === "An error occurred." ? "本地推理服务出错或超时" : error.message}</span><button type="button" onClick={() => void submit(question)} disabled={!ready || busy} aria-label="重试本轮问题">重试</button></div>}
@@ -547,7 +546,7 @@ export function AgentWorkspace({
             {(receipt || result.evidence.length > 0 || toolParts.length > 0 || knowledgeCoverage.length > 0) && <details className={styles.sources}>
               <summary>查看依据与本轮模型 <ChevronIcon /></summary>
               <InferenceReceiptView receipt={receipt} />
-              {result.sources.length > 0 && <p className={styles.muted}>本轮数据源：{result.sources.join("、")}{result.sources.some((source) => source === "json" || source === "json-fallback") ? " · 演示数据，非正式库存或报价依据" : ""}</p>}
+              {result.sources.length > 0 && <p className={styles.muted}>本轮数据源：{result.sources.join("、")}</p>}
               {result.evidence.length > 0 && <div className={styles.evidence} data-testid="search-evidence">{result.evidence.map((entry, index) => <div key={`${entry.title}-${index}`}><FileText size={14} /><span><strong>{entry.title}</strong><small>{entry.detail}</small></span></div>)}</div>}
               {toolParts.length > 0 && <div className={styles.toolTrace} aria-label="本轮工具调用">{toolParts.map((part) => <span key={part.toolCallId}>{part.type.replace(/^tool-/, "")} · {part.state === "output-available" ? "已返回" : part.state === "output-error" ? "失败" : "执行中"}</span>)}</div>}
               {knowledgeCoverage.length > 0 && <div className={styles.coverage} data-testid="knowledge-coverage"><strong>本轮知识上下文覆盖</strong>{knowledgeCoverage.map((entry) => <div key={entry.id}><span>{entry.name}</span><small>{entry.hasText ? `已纳入 ${entry.includedCharacters.toLocaleString()} / ${entry.totalCharacters.toLocaleString()} 字` : "没有可读正文"}{entry.truncated ? " · 已截断" : ""}</small></div>)}</div>}

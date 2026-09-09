@@ -3,8 +3,22 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const baseUrl = (process.env.BASE_URL ?? "http://localhost:3000").replace(/\/$/, "");
-const catalogUrl = new URL("../src/data/catalog.json", import.meta.url);
-const catalogSeed = JSON.parse(await readFile(fileURLToPath(catalogUrl), "utf8"));
+const fixtureUrls = [
+  new URL("../src/test/fixtures-data/catalog.fixture.json", import.meta.url),
+  new URL("../src/test/fixtures-data/business.fixture.json", import.meta.url),
+  new URL("../src/test/fixtures-data/crm.fixture.json", import.meta.url),
+];
+const [catalogFixture, businessFixture, crmFixture] = await Promise.all(fixtureUrls.map((url) => readFile(fileURLToPath(url), "utf8").then(JSON.parse)));
+const fixtureIds = new Set([
+  ...catalogFixture.products,
+  ...businessFixture.knowledgeEntries,
+  ...businessFixture.quoteHistory,
+  ...businessFixture.adminUsers,
+  ...businessFixture.aiLogs,
+  ...businessFixture.qualityIssues,
+  ...crmFixture.customers,
+  ...crmFixture.followupTasks,
+].map((entry) => entry.id));
 
 async function request(path, options) {
   const response = await fetch(`${baseUrl}${path}`, options);
@@ -16,24 +30,25 @@ async function request(path, options) {
 
 const bootstrap = await request("/api/v1/bootstrap");
 assert.equal(bootstrap.response.status, 200);
-assert.ok(bootstrap.body.data.products.length >= catalogSeed.products.length);
-assert.equal(bootstrap.body.data.products[0].id, catalogSeed.products[0].id);
-assert.equal(bootstrap.body.data.products[0].sku, catalogSeed.products[0].sku);
+assert.ok(["local", "postgres", "local-fallback"].includes(bootstrap.body.data.source));
 assert.equal(bootstrap.body.meta.source, bootstrap.body.data.source);
 assert.equal(bootstrap.body.dashboard.aiEvents.value, bootstrap.body.data.aiLogs.length);
+for (const key of ["products", "knowledgeEntries", "quoteHistory", "adminUsers", "aiLogs", "qualityIssues", "customers", "followupTasks"]) {
+  assert.ok(Array.isArray(bootstrap.body.data[key]), `${key} must be returned by the backend as an array`);
+  assert.equal(bootstrap.body.data[key].some((entry) => fixtureIds.has(entry.id)), false, `${key} must not contain test fixtures`);
+}
 
 const health = await request("/api/v1/health");
 assert.equal(health.response.status, 200);
 assert.equal(health.body.data.source, bootstrap.body.meta.source);
 
-const products = await request("/api/v1/products?q=ARC&limit=10");
+const products = await request("/api/v1/products?q=__lumaflow_fixture_absence_probe__&limit=10");
 assert.equal(products.response.status, 200);
-assert.ok(products.body.data.length > 0);
-assert.ok(products.body.data.every((product) => `${product.name}${product.model}${product.sku}`.toLowerCase().includes("arc")));
+assert.equal(products.body.data.length, 0);
 
-const customers = await request("/api/v1/customers?q=NOVA");
+const customers = await request("/api/v1/customers?q=__lumaflow_fixture_absence_probe__");
 assert.equal(customers.response.status, 200);
-assert.ok(customers.body.data.some((customer) => customer.company.includes("NOVA")));
+assert.equal(customers.body.data.length, 0);
 
 const followups = await request("/api/v1/followups?status=open");
 assert.equal(followups.response.status, 200);
@@ -60,9 +75,10 @@ console.log(JSON.stringify({
   ok: true,
   source: bootstrap.body.meta.source,
   productCount: bootstrap.body.data.products.length,
-  firstProduct: { id: bootstrap.body.data.products[0].id, sku: bootstrap.body.data.products[0].sku },
+  customerCount: bootstrap.body.data.customers.length,
+  fixtureRecordsVisible: false,
   customerSearchMatches: customers.body.meta.total,
   openFollowups: followups.body.meta.total,
   database: health.body.data.database,
-  checks: 22,
+  checks: 31,
 }, null, 2));

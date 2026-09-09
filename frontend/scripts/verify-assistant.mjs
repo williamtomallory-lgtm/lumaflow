@@ -51,10 +51,9 @@ const response = await fetch(`${baseUrl}/api/v1/assistant/chat`, {
   method: "POST",
   headers: { "content-type": "application/json", origin },
   body: JSON.stringify({
-    messages: [{ id: "message-verified-1", role: "user", parts: [{ type: "text", text: "找18W黑色轨道灯，库存至少50" }] }],
+    messages: [{ id: "message-verified-1", role: "user", parts: [{ type: "text", text: "请调用 searchProducts 搜索 ARC T18；没有结果就说明后端暂无产品，不要编造。" }] }],
     modelProfileId,
     mode: "instant",
-    customerId: "cust-nova",
   }),
 });
 
@@ -67,8 +66,8 @@ const stream = await response.text();
 assert.match(stream, /"type":"tool-output-available"/);
 assert.match(stream, /"toolName":"searchProducts"/);
 assert.doesNotMatch(stream, /"type":"error"/);
-assert.match(stream, /LT-ARC-T18-BK/);
-assert.match(stream, /126/);
+assert.match(stream, /"products":\[\]/);
+assert.doesNotMatch(stream, /LT-ARC-T18-BK|库存\s*126/);
 assert.match(stream, /searchProducts/);
 
 console.log(JSON.stringify({
@@ -81,6 +80,6 @@ console.log(JSON.stringify({
   forgedToolHistoryRejected: true,
   applicationSkillsLoaded: skills.data.skills.map((skill) => skill.id),
   toolCallsObserved: [...stream.matchAll(/"toolName":"([^"]+)"/g)].map((match) => match[1]).filter((value, index, values) => values.indexOf(value) === index),
-  groundedSkuObserved: "LT-ARC-T18-BK",
+  fixtureProductsVisible: false,
   streamingContentType: response.headers.get("content-type"),
 }, null, 2));

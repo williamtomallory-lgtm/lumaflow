@@ -1,5 +1,5 @@
 import { knowledgePatchSchema } from "@/lib/knowledge/contracts";
-import { getKnowledgeRecord, KnowledgeStoreError, toPublicKnowledgeEntry, updateKnowledgeRecord } from "@/lib/knowledge/store";
+import { deleteKnowledgeRecord, getKnowledgeRecord, KnowledgeStoreError, toPublicKnowledgeEntry, updateKnowledgeRecord } from "@/lib/knowledge/store";
 import { apiJson, authorizeAssistantRequest, enforceRateLimit, readValidatedJson, requestId } from "@/lib/server/api-security";
 import { authorizeKnowledgeRead, knowledgeError } from "../_shared";
 
@@ -32,6 +32,20 @@ export async function PATCH(request: Request, context: KnowledgeRouteContext) {
     const patch = await readValidatedJson(request, knowledgePatchSchema);
     const updated = await updateKnowledgeRecord(id, patch);
     return apiJson({ data: toPublicKnowledgeEntry(updated), meta: { apiVersion: "v1" as const, requestId: requestIdentifier } }, 200, requestIdentifier);
+  } catch (error) {
+    return knowledgeError(error, requestIdentifier);
+  }
+}
+
+export async function DELETE(request: Request, context: KnowledgeRouteContext) {
+  const requestIdentifier = requestId(request);
+  try {
+    enforceRateLimit(request, 20);
+    authorizeKnowledgeRead(request);
+    authorizeAssistantRequest(request);
+    const { id } = await context.params;
+    await deleteKnowledgeRecord(id);
+    return apiJson({ data: { id, deleted: true }, meta: { apiVersion: "v1" as const, requestId: requestIdentifier } }, 200, requestIdentifier);
   } catch (error) {
     return knowledgeError(error, requestIdentifier);
   }

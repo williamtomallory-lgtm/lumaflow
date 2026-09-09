@@ -3,18 +3,22 @@ import { mkdir, open, readFile, rename, unlink, writeFile } from "node:fs/promis
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { followupTaskSchema, productSchema } from "../contracts/api";
+import { customerSchema, followupTaskSchema, productSchema } from "../contracts/api";
 
-const schema = z.object({ products: z.array(productSchema), followups: z.array(followupTaskSchema) });
+const schema = z.object({
+  products: z.array(productSchema).default([]),
+  customers: z.array(customerSchema).default([]),
+  followups: z.array(followupTaskSchema).default([]),
+});
 export type LocalBusinessData = z.infer<typeof schema>;
 function directory() { return path.resolve(/* turbopackIgnore: true */ process.env.LUMAFLOW_BUSINESS_DIR || path.join(process.cwd(), ".local-data", "business")); }
 
 export async function readLocalBusinessData(): Promise<LocalBusinessData> {
   try { return schema.parse(JSON.parse(await readFile(path.join(directory(), "records.json"), "utf8"))); }
-  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return { products: [], followups: [] }; throw error; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return { products: [], customers: [], followups: [] }; throw error; }
 }
 
-/** Atomic, cross-process serialized writes. Never modify the checked-in demo seeds. */
+/** Atomic, cross-process serialized writes for user-created runtime records. */
 export async function mutateLocalBusinessData<T>(operation: (data: LocalBusinessData) => T): Promise<T> {
   const root = directory();
   await mkdir(root, { recursive: true });

@@ -26,7 +26,7 @@ function request(messages: unknown[] = [userMessage], origin = "http://localhost
   return new Request("http://localhost:3000/api/v1/assistant/chat", {
     method: "POST",
     headers: { origin, "content-type": "application/json" },
-    body: JSON.stringify({ messages, mode: "normal", customerId: "cust-nova", ...extraBody }),
+    body: JSON.stringify({ messages, mode: "normal", ...extraBody }),
   });
 }
 
@@ -161,17 +161,15 @@ describe("assistant route with an in-memory model protocol", () => {
     expect(authorization).toBe("Bearer ollama-local");
   });
 
-  it("loads skills, queries actual product and inventory tools, and streams their results", async () => {
+  it("loads skills and reports an empty runtime without surfacing fixture products", async () => {
     const upstreamRequests: WireRequest[] = [];
     vi.stubGlobal("fetch", vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as WireRequest;
       upstreamRequests.push(body);
       const results = body.messages.filter((message) => message.role === "tool").map((message) => JSON.parse(message.content));
       const search = results.find((result) => Array.isArray(result.products));
-      const inventory = results.find((result) => result.inventory);
       if (!search) return toolCall("searchProducts", { query: "18W 黑色轨道灯", powerMin: 17, powerMax: 19, color: "黑", stockMin: 50, limit: 3 });
-      if (!inventory) return toolCall("checkInventory", { identifier: search.products[0].sku });
-      return completion({ content: `协议模拟：${search.products[0].sku} 库存 ${inventory.inventory.stock}，数据源 ${search.source}。` }, "stop");
+      return completion({ content: `后端当前没有匹配产品，数据源 ${search.source}。` }, "stop");
     }));
     const { POST } = await import("../../app/api/v1/assistant/chat/route");
     const response = await POST(request());
@@ -181,16 +179,18 @@ describe("assistant route with an in-memory model protocol", () => {
     const stream = await response.text();
     expect(stream).not.toContain('"type":"error"');
     expect(stream).toContain('"toolName":"searchProducts"');
-    expect(stream).toContain('"toolName":"checkInventory"');
-    expect(stream).toContain("LT-ARC-T18-BK");
-    expect(stream).toContain("库存 126");
-    expect(upstreamRequests).toHaveLength(3);
+    expect(stream).not.toContain('"toolName":"checkInventory"');
+    expect(stream).toContain("后端当前没有匹配产品");
+    expect(stream).not.toContain("LT-ARC-T18-BK");
+    expect(stream).not.toContain("库存 126");
+    expect(upstreamRequests).toHaveLength(2);
     const instructions = upstreamRequests[0].messages.filter((message) => message.role === "system").map((message) => message.content).join("\n");
     expect(instructions).toContain("Skill product-advisor@1.0.0");
     expect(instructions).toContain("Skill reply-drafter@1.0.0");
     expect(instructions).toContain("没有记忆写入工具");
     expect(upstreamRequests[0].tools.map((tool) => tool.function.name)).toHaveLength(6);
     const productOutput = upstreamRequests[1].messages.find((message) => message.role === "tool")?.content ?? "";
+    expect(productOutput).toContain('"products":[]');
     expect(productOutput).not.toContain('"cost"');
     expect(productOutput).not.toContain('"supplier"');
   });

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { AppDataSnapshot } from "../data-snapshot";
 import type { Product } from "../catalog";
-import type { FollowupTask } from "../crm";
+import type { Customer, FollowupTask } from "../crm";
 import { cowAgentIdSchema } from "./cowagent-agent";
 
 const nonEmptyString = z.string().trim().min(1);
@@ -100,7 +100,7 @@ const customerQuoteSchema = z.object({
   validUntil: nonEmptyString.max(80),
 });
 
-const customerSchema = z.object({
+export const customerSchema = z.object({
   id: idSchema,
   company: nonEmptyString.max(200),
   name: nonEmptyString.max(120),
@@ -181,15 +181,15 @@ const qualityIssueSchema = z.object({
 });
 
 export const dataSnapshotSchema: z.ZodType<AppDataSnapshot> = z.object({
-  source: z.enum(["json", "postgres", "json-fallback"]),
-  products: z.array(productSchema).min(1).max(20_000),
-  knowledgeEntries: z.array(knowledgeSchema).min(1).max(100_000),
-  currencyRates: z.object({ CNY: z.number().positive(), USD: z.number().positive(), CAD: z.number().positive() }),
+  source: z.enum(["local", "postgres", "local-fallback"]),
+  products: z.array(productSchema).max(20_000),
+  knowledgeEntries: z.array(knowledgeSchema).max(100_000),
+  currencyRates: z.object({ CNY: z.number().positive().optional(), USD: z.number().positive().optional(), CAD: z.number().positive().optional() }),
   quoteHistory: z.array(quoteHistorySchema).max(100_000),
   adminUsers: z.array(adminUserSchema).max(100_000),
   aiLogs: z.array(aiLogSchema).max(100_000),
   qualityIssues: z.array(qualityIssueSchema).max(100_000),
-  customers: z.array(customerSchema).min(1).max(100_000),
+  customers: z.array(customerSchema).max(100_000),
   followupTasks: z.array(followupTaskSchema).max(100_000),
 });
 
@@ -222,7 +222,7 @@ export const bootstrapResponseSchema = z.object({
     apiVersion: z.literal("v1"),
     requestId: nonEmptyString,
     generatedAt: z.string().datetime(),
-    source: z.enum(["json", "postgres", "json-fallback"]),
+    source: z.enum(["local", "postgres", "local-fallback"]),
   }),
 });
 
@@ -232,6 +232,17 @@ export const createProductSchema = productSchema.omit({ id: true });
 export const updateProductSchema = productSchema.omit({ id: true }).partial().refine((value) => Object.keys(value).length > 0, "At least one field is required");
 export const updateFollowupSchema = z.object({ status: z.enum(["open", "completed"]) }).strict();
 export const createFollowupSchema = followupTaskSchema.pick({ customerId: true, title: true, description: true, type: true, priority: true }).extend({ dueAt: z.string().datetime({ offset: true }) }).strict();
+export const createCustomerSchema = z.object({
+  company: nonEmptyString.max(200),
+  name: nonEmptyString.max(120),
+  role: z.string().trim().max(120).default(""),
+  industry: z.string().trim().max(120).default(""),
+  location: z.string().trim().max(200).default(""),
+  email: z.string().trim().max(254).default(""),
+  phone: z.string().trim().max(60).default(""),
+  owner: z.string().trim().max(120).default(""),
+  source: z.string().trim().max(120).default("手动录入"),
+}) satisfies z.ZodType<Pick<Customer, "company" | "name" | "role" | "industry" | "location" | "email" | "phone" | "owner" | "source">>;
 
 export const listQuerySchema = z.object({
   q: z.string().trim().max(200).default(""),

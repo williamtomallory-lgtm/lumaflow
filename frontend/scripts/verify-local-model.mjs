@@ -10,13 +10,8 @@ assert.equal(local?.model, modelId);
 assert.equal(local?.reachable, true, "Start the installed local model service first.");
 assert.equal(local?.connectionKind, "live");
 const bootstrap = await (await fetch(`${baseUrl}/api/v1/bootstrap`)).json();
-const product = bootstrap.data.products[0];
-assert.ok(product?.sku);
-const recommendation = process.argv.includes("--recommend");
-const color = product.colors[0].includes("黑") ? "黑色" : product.colors[0];
-const prompt = recommendation
-  ? `推荐一款${product.power}${color}${product.category}，查询库存并提供参数表和场景图资料，回复要注明SKU。`
-  : `请搜索产品 ${product.sku}，调用库存工具核对它有多少库存，再用两句话告诉我型号、SKU和库存。`;
+assert.ok(["local", "postgres", "local-fallback"].includes(bootstrap.data.source));
+const prompt = "请调用 searchProducts 搜索 ARC T18。如果后端没有结果，请明确说明暂无产品数据，不要补造 SKU、库存或价格。";
 
 const startedAt = performance.now();
 const response = await fetch(`${baseUrl}/api/v1/assistant/chat`, {
@@ -51,28 +46,17 @@ for await (const chunk of response.body) {
 }
 assert.equal(events.some((event) => event.type === "error"), false, JSON.stringify(events.filter((event) => event.type === "error")));
 const calls = events.filter((event) => event.type === "tool-input-available");
-// An exact-SKU inventory result already carries the authoritative SKU and model.
-// Recommendation mode below still requires search, details and asset lookups.
-const hasProductLookup = calls.some((event) => ["searchProducts", "getProductDetails", "checkInventory"].includes(event.toolName));
-if (!hasProductLookup || !calls.some((event) => event.toolName === "checkInventory")) {
+const searchCall = calls.find((event) => event.toolName === "searchProducts");
+if (!searchCall) {
   console.error("Unexpected real-model trace:", JSON.stringify(events.filter((event) => event.type !== "tool-input-delta"), null, 2));
 }
-assert.ok(hasProductLookup, "Actual model did not query a product tool.");
-assert.ok(calls.some((event) => event.toolName === "checkInventory"), "Actual model did not call inventory.");
-const inventoryCall = calls.find((event) => event.toolName === "checkInventory");
-const inventoryResult = events.find((event) => event.type === "tool-output-available" && event.toolCallId === inventoryCall.toolCallId);
-assert.equal(inventoryResult?.output?.inventory?.sku, product.sku);
-assert.equal(inventoryResult?.output?.inventory?.stock, product.stock);
+assert.ok(searchCall, "Actual model did not query searchProducts.");
+const searchResult = events.find((event) => event.type === "tool-output-available" && event.toolCallId === searchCall.toolCallId);
+assert.equal(searchResult?.output?.total, 0, "A clean runtime must not surface fixture products.");
+assert.deepEqual(searchResult?.output?.products, []);
 const reply = events.filter((event) => event.type === "text-delta").map((event) => event.delta).join("");
-assert.ok(reply.includes(product.sku), `Model reply omitted the SKU: ${reply}`);
-assert.ok(reply.includes(String(product.stock)), `Model reply omitted the verified inventory: ${reply}`);
-if (recommendation) {
-  for (const name of ["searchProducts", "getProductDetails", "getProductAssets"]) {
-    assert.ok(calls.some((call) => call.toolName === name), `Model did not call ${name}.`);
-  }
-  assert.doesNotMatch(reply, /\]\([^)]*\)/, "Attachment tool provides metadata, not download links.");
-  assert.ok(product.assets.some((asset) => reply.includes(asset.name)), "Reply must reference actual attachment names.");
-}
+assert.ok(reply.trim(), "Model returned no text.");
+assert.doesNotMatch(reply, /LT-ARC-T18-BK|库存\s*126/, "Model surfaced removed fixture business values.");
 const loaded = await (await fetch("http://127.0.0.1:11434/api/ps")).json();
 const loadedModel = loaded.models.find((entry) => entry.name === modelId);
 assert.ok(loadedModel, "Local runtime did not report the actual loaded model.");
@@ -82,11 +66,10 @@ console.log(JSON.stringify({
   model: modelId,
   modelProfileId: profileId,
   connectionKind: "live",
-  scenario: recommendation ? "recommendation-and-assets" : "exact-sku-inventory",
+  scenario: "empty-runtime-no-fabrication",
   toolCalls: calls.map((event) => event.toolName),
   source: bootstrap.meta.source,
-  sku: product.sku,
-  expectedStock: product.stock,
+  fixtureProductsVisible: false,
   firstTextMs: firstTokenMs,
   elapsedMs: Math.round(performance.now() - startedAt),
   sizeBytes: loadedModel.size,

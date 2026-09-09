@@ -305,6 +305,16 @@ export async function getKnowledgeRecord(id: string) {
   return readRecordByPath(metadataPath(id));
 }
 
+export async function deleteKnowledgeRecord(id: string) {
+  return withMutationLock(async () => {
+    const record = await getKnowledgeRecord(id);
+    if (!record) throw new KnowledgeStoreError(404, "KNOWLEDGE_NOT_FOUND", "知识文件不存在。");
+    await rm(metadataPath(record.id), { force: true });
+    await rm(filePath(record.id), { force: true });
+    return record;
+  });
+}
+
 export async function getKnowledgeTextById(id: string) {
   const record = await getKnowledgeRecord(id);
   if (!record?.extractedText) return null;

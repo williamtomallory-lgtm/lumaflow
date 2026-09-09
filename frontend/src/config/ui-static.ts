@@ -44,13 +44,3 @@ export const DASHBOARD_LABELS = {
   aiEvents: "AI 操作记录",
   quotations: "历史报价",
 } as const;
-
-/**
- * Authentication is not connected in the demo, so this identity is an
- * intentional UI fixture rather than customer, catalog, or operational data.
- */
-export const DEMO_PROFILE = {
-  initials: "JH",
-  name: "Junjun Hu",
-  role: "销售顾问",
-} as const;

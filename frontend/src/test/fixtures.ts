@@ -1,6 +1,6 @@
-import businessSeed from "../data/business.json";
-import catalogSeed from "../data/catalog.json";
-import crmSeed from "../data/crm.json";
+import businessSeed from "./fixtures-data/business.fixture.json";
+import catalogSeed from "./fixtures-data/catalog.fixture.json";
+import crmSeed from "./fixtures-data/crm.fixture.json";
 import type { AdminUser, AiLog, Currency, KnowledgeEntry, QualityIssue, QuoteHistoryRecord } from "../lib/business";
 import type { Product } from "../lib/catalog";
 import type { CrmAsset, Customer, FollowupTask } from "../lib/crm";
@@ -14,7 +14,7 @@ export const testCustomers = crmSeed.customers as Customer[];
 export const testFollowups = crmSeed.followupTasks as FollowupTask[];
 
 export const testSnapshot: AppDataSnapshot = {
-  source: "json",
+  source: "local",
   products: testProducts,
   knowledgeEntries: testKnowledge,
   currencyRates: testCurrencyRates,

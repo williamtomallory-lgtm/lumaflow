@@ -79,7 +79,7 @@ const server = createServer(async (request, response) => {
     : "协议模拟：当前条件没有匹配产品。";
   sse(response, [
     { ...base, choices: [{ index: 0, delta: { role: "assistant", content: reply }, finish_reason: null }] },
-    { ...base, choices: [{ index: 0, delta: { content: `来源：searchProducts / checkInventory（${searchResult.source}）。演示或回退数据不作为正式承诺依据。` }, finish_reason: null }] },
+    { ...base, choices: [{ index: 0, delta: { content: `来源：searchProducts / checkInventory（${searchResult.source}）。所有业务值均以工具实际返回为准。` }, finish_reason: null }] },
     { ...base, choices: [{ index: 0, delta: {}, finish_reason: "stop" }] },
   ]);
 });

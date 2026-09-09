@@ -55,4 +55,13 @@ describe("grounded sales-agent tools", () => {
     expect(result.created && result.draft.confirmationRequired).toBe(true);
     expect(result.created && result.draft.totalCny).toBeGreaterThan(0);
   });
+
+  it("refuses to invent a quotation when no real CNY rate is configured", () => {
+    const result = createQuoteDraftRecord(
+      { sku: "LT-ARC-T18-BK", quantity: 20, discountPercent: 5 },
+      { ...testSnapshot, currencyRates: {} },
+    );
+
+    expect(result).toEqual({ created: false, reason: "CURRENCY_RATE_UNAVAILABLE", draft: null });
+  });
 });

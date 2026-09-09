@@ -35,8 +35,8 @@ paths:
       responses:
         "200": { description: Product page }
     post:
-      summary: Persist a new product in PostgreSQL
-      security: [{ bearerAuth: [] }, { sameOriginDemo: [] }]
+      summary: Persist a new product in PostgreSQL or the server-side local store
+      security: [{ bearerAuth: [] }, { sameOriginLocal: [] }]
       requestBody:
         required: true
         content:
@@ -56,8 +56,8 @@ paths:
         "200": { description: Product }
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
-      summary: Update selected product fields in PostgreSQL
-      security: [{ bearerAuth: [] }, { sameOriginDemo: [] }]
+      summary: Update selected product fields in PostgreSQL or the server-side local store
+      security: [{ bearerAuth: [] }, { sameOriginLocal: [] }]
       requestBody:
         required: true
         content:
@@ -76,6 +76,17 @@ paths:
         - $ref: "#/components/parameters/Offset"
       responses:
         "200": { description: Customer page }
+    post:
+      summary: Persist a customer in PostgreSQL or the server-side local store
+      security: [{ bearerAuth: [] }, { sameOriginLocal: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomerInput" }
+      responses:
+        "201": { description: Customer created }
+        "422": { $ref: "#/components/responses/ValidationFailed" }
   /followups:
     get:
       summary: List and search follow-up tasks
@@ -92,8 +103,8 @@ paths:
     parameters:
       - $ref: "#/components/parameters/Id"
     patch:
-      summary: Change a follow-up status in PostgreSQL
-      security: [{ bearerAuth: [] }, { sameOriginDemo: [] }]
+      summary: Change a follow-up status in PostgreSQL or the server-side local store
+      security: [{ bearerAuth: [] }, { sameOriginLocal: [] }]
       requestBody:
         required: true
         content:
@@ -226,7 +237,7 @@ paths:
         "200": { description: Agent identity, skill versions and tools. Memory persistence is explicitly not implemented. }
   /knowledge:
     get:
-      summary: List local uploads and archive statistics, excluding JSON demo knowledge
+      summary: List local uploads and archive statistics, excluding test fixtures
       security: [{ assistantBearer: [] }, { localKnowledgeOrigin: [] }]
       parameters:
         - $ref: "#/components/parameters/Query"
@@ -291,6 +302,12 @@ paths:
         "200": { description: Saved manual classification; no CRM or PostgreSQL write }
         "404": { $ref: "#/components/responses/NotFound" }
         "422": { $ref: "#/components/responses/ValidationFailed" }
+    delete:
+      summary: Delete one local knowledge record and its original bytes
+      security: [{ assistantBearer: [] }, { localKnowledgeOrigin: [] }]
+      responses:
+        "200": { description: Metadata and original file deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
   /knowledge/{id}/download:
     parameters:
       - $ref: "#/components/parameters/KnowledgeId"
@@ -323,11 +340,11 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-    sameOriginDemo:
+    sameOriginLocal:
       type: apiKey
       in: header
       name: Origin
-      description: Development-only same-origin mode; requires DEMO_WRITES_ENABLED=true.
+      description: Local same-origin mode; requires LUMAFLOW_WRITES_ENABLED=true.
     assistantBearer:
       type: http
       scheme: bearer
@@ -376,6 +393,19 @@ components:
     ProductInput:
       type: object
       description: Full Product fields except the server-generated id. Runtime schema is authoritative.
+    CustomerInput:
+      type: object
+      required: [company, name]
+      properties:
+        company: { type: string, minLength: 1, maxLength: 200 }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        role: { type: string, maxLength: 120 }
+        industry: { type: string, maxLength: 120 }
+        location: { type: string, maxLength: 200 }
+        email: { type: string, maxLength: 254 }
+        phone: { type: string, maxLength: 60 }
+        owner: { type: string, maxLength: 120 }
+        source: { type: string, maxLength: 120 }
     BootstrapResponse:
       type: object
       required: [data, dashboard, meta]
@@ -389,7 +419,7 @@ components:
             apiVersion: { const: v1 }
             requestId: { type: string }
             generatedAt: { type: string, format: date-time }
-            source: { type: string, enum: [json, postgres, json-fallback] }
+            source: { type: string, enum: [local, postgres, local-fallback] }
     Error:
       type: object
       required: [error, meta]
@@ -417,5 +447,5 @@ components:
       description: Zod validation failed
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
     PersistenceUnavailable:
-      description: PostgreSQL is not configured or writes are disabled
+      description: The configured persistence service is unavailable or writes are disabled
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }

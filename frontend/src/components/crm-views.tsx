@@ -36,7 +36,7 @@ import {
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, isToolUIPart } from "ai";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { createFollowupViaApi, listFollowupsViaApi, updateFollowupStatusViaApi } from "@/lib/client/backend-api";
+import { createCustomerViaApi, createFollowupViaApi, listFollowupsViaApi, updateFollowupStatusViaApi } from "@/lib/client/backend-api";
 import { useModelHealth } from "@/hooks/use-model-health";
 import { useModelCatalog } from "@/hooks/use-model-catalog";
 import type { SalesAgentUIMessage } from "@/lib/ai/sales-agent";
@@ -54,9 +54,7 @@ import {
   searchCustomers,
   type CrmAsset,
   type Customer,
-  type CustomerContact,
   type CustomerMessageAnalysis,
-  type CustomerNeed,
   type FollowupFilter,
   type FollowupTask,
   type FollowupTaskStatus,
@@ -387,6 +385,7 @@ export function CustomersView({ customers, initialCustomerId, onAnalyzeCustomer,
   const [customerState, setCustomerState] = useState(customers);
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState(initialCustomerId ?? customers[0]?.id ?? "");
+  const [creating, setCreating] = useState(false);
   const filteredCustomers = useMemo(() => searchCustomers(query, customerState), [customerState, query]);
   const selectedCustomer = getCustomerById(selectedId, customerState) ?? filteredCustomers[0];
 
@@ -395,24 +394,9 @@ export function CustomersView({ customers, initialCustomerId, onAnalyzeCustomer,
     onOpenCustomer?.(customer.id);
   }
 
-  function createCustomer() {
-    const id = `cust-local-${Date.now()}`;
-    const customer: Customer = {
-      id, company: "新客户（待完善）", name: "新联系人", role: "待补充", avatar: "新", industry: "待补充", location: "待补充",
-      stage: "新客", source: "手动创建", tags: ["新建"], email: "", phone: "", owner: "Junjun Hu", estimatedValue: 0,
-      lastContactAt: new Date().toISOString(), lastContactLabel: "刚刚", unreadCount: 0, contacts: [], conversations: [], needs: [], quotes: [],
-      contextMemory: ["这是一个本地新建客户，请补充联系人、行业和项目需求。"],
-    };
-    setCustomerState((current) => [customer, ...current]);
-    setSelectedId(id);
-    setQuery("");
-    onOpenCustomer?.(id);
-    onToast?.("新客户档案已创建");
-  }
-
   return (
     <div className={styles.root} data-testid="customers-view">
-      <div className={styles.viewHeader}><div><span className={styles.eyebrow}>Customer & Conversation · 复盘 Agent</span><h1>客户档案，连同每一次上下文</h1><p>完整聊天记录、客户记忆与知识库文件可以一键交给复盘 Agent 分析。</p></div><button className={styles.primaryButton} onClick={createCustomer}><Plus size={16} /> 新建客户</button></div>
+      <div className={styles.viewHeader}><div><span className={styles.eyebrow}>Customer & Conversation · 复盘 Agent</span><h1>客户档案，连同每一次上下文</h1><p>完整聊天记录、客户记忆与知识库文件可以一键交给复盘 Agent 分析。</p></div><button className={styles.primaryButton} onClick={() => setCreating(true)}><Plus size={16} /> 新建客户</button></div>
       <div className={styles.metricStrip} aria-label="客户指标"><Metric icon={UsersRound} label="客户总数" value={String(customerState.length).padStart(2, "0")} detail={`${customerState.filter((customer) => customer.stage !== "沉睡").length} 个活跃档案`} tone="green" /><Metric icon={MessageCircle} label="未读会话" value={String(customerState.reduce((sum, customer) => sum + customer.unreadCount, 0)).padStart(2, "0")} detail="需要及时处理" tone="gold" /><Metric icon={CircleDollarSign} label="机会金额" value={formatQuoteAmount(customerState.reduce((sum, customer) => sum + customer.estimatedValue, 0))} detail="含报价中客户" tone="blue" /><Metric icon={Tag} label="待确认需求" value={String(customerState.reduce((sum, customer) => sum + customer.needs.filter((need) => need.status === "待确认").length, 0)).padStart(2, "0")} detail="可转成跟进任务" tone="rose" /></div>
 
       <div className={styles.customersLayout}>
@@ -420,42 +404,57 @@ export function CustomersView({ customers, initialCustomerId, onAnalyzeCustomer,
           <div className={styles.listHeader}><div><span className={styles.sectionKicker}>客户目录</span><h2>全部客户 <em>{filteredCustomers.length}</em></h2></div><button className={styles.iconButton} aria-label="客户筛选" onClick={() => onToast?.("可按阶段、行业或负责人筛选") }><Tag size={15} /></button></div>
           <label className={styles.searchField}><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索公司、联系人、标签" aria-label="搜索客户" /><kbd>⌘ K</kbd></label>
           <div className={styles.customerFilters}><button className={!query ? styles.filterActive : ""} onClick={() => setQuery("")}>全部</button><button onClick={() => setQuery("报价中")}>报价中</button><button onClick={() => setQuery("跟进中")}>跟进中</button><button onClick={() => setQuery("未读")}>未读</button></div>
-          <div className={styles.customerList}>{filteredCustomers.length > 0 ? filteredCustomers.map((customer) => <button className={cx(styles.customerRow, selectedCustomer?.id === customer.id && styles.customerRowSelected)} key={customer.id} onClick={() => selectCustomer(customer)}><Avatar customer={customer} /><span className={styles.customerRowCopy}><strong>{customer.name}<small>{customer.company}</small></strong><em>{customer.lastContactLabel}</em><span>{customer.tags.slice(0, 2).join(" · ")}</span></span><span className={styles.customerRowEnd}><StageBadge stage={customer.stage} />{customer.unreadCount > 0 && <b>{customer.unreadCount}</b>}</span></button>) : <EmptyPanel icon={Search} title="没有匹配客户" detail="换一个公司名、联系人或标签。" />}</div>
+          <div className={styles.customerList}>{filteredCustomers.length > 0 ? filteredCustomers.map((customer) => <button className={cx(styles.customerRow, selectedCustomer?.id === customer.id && styles.customerRowSelected)} key={customer.id} onClick={() => selectCustomer(customer)}><Avatar customer={customer} /><span className={styles.customerRowCopy}><strong>{customer.name}<small>{customer.company}</small></strong><em>{customer.lastContactLabel}</em><span>{customer.tags.slice(0, 2).join(" · ")}</span></span><span className={styles.customerRowEnd}><StageBadge stage={customer.stage} />{customer.unreadCount > 0 && <b>{customer.unreadCount}</b>}</span></button>) : <EmptyPanel icon={Search} title={customerState.length ? "没有匹配客户" : "后端尚未返回客户"} detail={customerState.length ? "换一个公司名、联系人或标签。" : "可新建真实客户，或连接 PostgreSQL 后导入客户数据。"} />}</div>
         </aside>
 
-        {selectedCustomer ? <CustomerProfile key={selectedCustomer.id} customer={selectedCustomer} onAnalyze={() => onAnalyzeCustomer?.(selectedCustomer)} onToast={onToast} /> : <section className={styles.card}><EmptyPanel icon={UsersRound} title="选择一个客户" detail="从左侧目录选择客户查看完整上下文。" /></section>}
+        {selectedCustomer ? <CustomerProfile key={selectedCustomer.id} customer={selectedCustomer} onAnalyze={() => onAnalyzeCustomer?.(selectedCustomer)} onToast={onToast} /> : <section className={styles.card}><EmptyPanel icon={UsersRound} title="没有客户数据" detail="页面不会生成示例客户；请从后端导入或新建真实客户。" /></section>}
       </div>
+      {creating && <CustomerForm onClose={() => setCreating(false)} onCreated={(customer) => { setCustomerState((current) => [customer, ...current]); setSelectedId(customer.id); setQuery(""); setCreating(false); onOpenCustomer?.(customer.id); onToast?.("客户已保存到后端"); }} />}
     </div>
   );
 }
 
 function CustomerProfile({ customer, onAnalyze, onToast }: { customer: Customer; onAnalyze: () => void; onToast?: CrmToastHandler }) {
   const latestInbound = getLatestInboundMessage(customer);
-  const [contacts, setContacts] = useState<CustomerContact[]>(customer.contacts);
-  const [needs, setNeeds] = useState<CustomerNeed[]>(customer.needs);
   const [showAllMessages, setShowAllMessages] = useState(false);
-
-  function addContact() {
-    setContacts((current) => [...current, { id: `contact-${Date.now()}`, name: "新联系人", role: "待补充", email: "", phone: "", preferredChannel: "微信" }]);
-    onToast?.("联系人已添加，请继续完善资料");
-  }
-
-  function addNeed() {
-    setNeeds((current) => [{ id: `need-${Date.now()}`, title: "新需求（待确认）", detail: "请记录使用场景、数量、规格和交期。", status: "待确认", priority: "中", updatedAt: new Date().toISOString() }, ...current]);
-    onToast?.("客户需求已添加");
-  }
   return (
     <section className={styles.profileColumn}>
       <div className={cx(styles.card, styles.profileHero)}><div className={styles.profileIdentity}><Avatar customer={customer} /><div><div className={styles.profileTitle}><h2>{customer.company}</h2><StageBadge stage={customer.stage} /></div><p>{customer.name} · {customer.role} · {customer.industry}</p><span><Tag size={13} /> {customer.tags.join(" · ")}</span></div></div><div className={styles.profileActions}><button className={styles.secondaryButton} onClick={() => copyText([customer.email, customer.phone].filter(Boolean).join("\n"), onToast, "客户联系方式已复制")}><Phone size={15} /> 联系客户</button><button className={styles.primaryButton} onClick={onAnalyze}><Sparkles size={15} /> 复盘全部会话</button></div><div className={styles.profileStats}><div><small>机会金额</small><strong>{formatQuoteAmount(customer.estimatedValue)}</strong></div><div><small>负责人</small><strong>{customer.owner}</strong></div><div><small>最后联系</small><strong>{customer.lastContactLabel}</strong></div><div><small>来源</small><strong>{customer.source}</strong></div></div></div>
       <div className={styles.profileGrid}>
-        <section className={cx(styles.card, styles.contactsCard)}><div className={styles.listHeader}><div><span className={styles.sectionKicker}>联系人</span><h2>联系方式</h2></div><button className={styles.iconButton} aria-label="添加联系人" onClick={addContact}><Plus size={15} /></button></div><div className={styles.contactList}>{contacts.map((contact) => <div className={styles.contactRow} key={contact.id}><span className={styles.contactAvatar}>{contact.name.slice(0, 1)}</span><div><strong>{contact.name}{contact.isPrimary && <em>主要联系人</em>}</strong><small>{contact.role} · 首选 {contact.preferredChannel}</small><span>{contact.email && <a href={`mailto:${contact.email}`}><Mail size={13} /> {contact.email}</a>}{contact.phone && <a href={`tel:${contact.phone}`}><Phone size={13} /> {contact.phone}</a>}</span></div></div>)}</div></section>
+        <section className={cx(styles.card, styles.contactsCard)}><div className={styles.listHeader}><div><span className={styles.sectionKicker}>联系人</span><h2>联系方式</h2></div></div><div className={styles.contactList}>{customer.contacts.map((contact) => <div className={styles.contactRow} key={contact.id}><span className={styles.contactAvatar}>{contact.name.slice(0, 1)}</span><div><strong>{contact.name}{contact.isPrimary && <em>主要联系人</em>}</strong><small>{contact.role} · 首选 {contact.preferredChannel}</small><span>{contact.email && <a href={`mailto:${contact.email}`}><Mail size={13} /> {contact.email}</a>}{contact.phone && <a href={`tel:${contact.phone}`}><Phone size={13} /> {contact.phone}</a>}</span></div></div>)}{!customer.contacts.length && <EmptyPanel icon={UsersRound} title="暂无联系人明细" detail="当前只显示后端已保存的数据。" />}</div></section>
         <section className={cx(styles.card, styles.memoryCard)}><div className={styles.listHeader}><div><span className={styles.sectionKicker}>上下文记忆</span><h2>销售应该记住的事</h2></div><ShieldCheck size={17} className={styles.safeIcon} /></div><div className={styles.memoryList}>{customer.contextMemory.map((memory, index) => <div key={memory}><span>{String(index + 1).padStart(2, "0")}</span><p>{memory}</p></div>)}</div></section>
         <section className={cx(styles.card, styles.conversationCard)}><div className={styles.listHeader}><div><span className={styles.sectionKicker}>Conversation · {customer.conversations.length}</span><h2>聊天记录</h2></div><button className={styles.secondaryButton} onClick={() => setShowAllMessages((current) => !current)}><Archive size={14} /> {showAllMessages ? "收起" : "查看全部"}</button></div>{latestInbound && <div className={styles.latestMessage}><span><MessageCircle size={14} /> 待处理消息</span><p>{latestInbound.content}</p><small>{latestInbound.channel} · {formatDateTime(latestInbound.timestamp)}</small><button className={styles.linkButton} onClick={onAnalyze}>交给销售助手 <ArrowRight size={14} /></button></div>}<div className={styles.timeline}>{(showAllMessages ? customer.conversations : customer.conversations.slice(-3)).map((message) => <div className={cx(styles.timelineItem, message.direction === "inbound" ? styles.timelineInbound : message.direction === "internal" ? styles.timelineInternal : styles.timelineOutbound)} key={message.id}><span className={styles.timelineDot} /><div><div className={styles.timelineMeta}><strong>{message.author}</strong><span>{message.channel} · {formatDateTime(message.timestamp)}</span></div><p>{message.content}</p></div></div>)}</div></section>
-        <section className={cx(styles.card, styles.needsCard)}><div className={styles.listHeader}><div><span className={styles.sectionKicker}>需求</span><h2>客户要解决的问题</h2></div><button className={styles.iconButton} aria-label="添加需求" onClick={addNeed}><Plus size={15} /></button></div><div className={styles.needList}>{needs.map((need) => <div className={styles.needRow} key={need.id}><span className={cx(styles.needStatus, need.status === "待确认" && styles.needPending)}>{need.status === "已解决" ? <CheckCircle2 size={14} /> : <Clock3 size={14} />}</span><div><strong>{need.title}</strong><p>{need.detail}</p><small>更新于 {formatDateTime(need.updatedAt)}</small></div><PriorityBadge priority={need.priority} /></div>)}</div></section>
+        <section className={cx(styles.card, styles.needsCard)}><div className={styles.listHeader}><div><span className={styles.sectionKicker}>需求</span><h2>客户要解决的问题</h2></div></div><div className={styles.needList}>{customer.needs.map((need) => <div className={styles.needRow} key={need.id}><span className={cx(styles.needStatus, need.status === "待确认" && styles.needPending)}>{need.status === "已解决" ? <CheckCircle2 size={14} /> : <Clock3 size={14} />}</span><div><strong>{need.title}</strong><p>{need.detail}</p><small>更新于 {formatDateTime(need.updatedAt)}</small></div><PriorityBadge priority={need.priority} /></div>)}{!customer.needs.length && <EmptyPanel icon={Clock3} title="暂无客户需求" detail="当前只显示后端已保存的数据。" />}</div></section>
         <section className={cx(styles.card, styles.quotesCard)}><div className={styles.listHeader}><div><span className={styles.sectionKicker}>Quote history · {customer.quotes.length}</span><h2>历史报价记录</h2></div></div>{customer.quotes.length > 0 ? <div className={styles.quoteList}>{customer.quotes.map((quote) => <div className={styles.quoteRow} key={quote.id}><span className={styles.quoteIcon}><CircleDollarSign size={15} /></span><div><strong>{quote.quoteNo}</strong><p>{quote.productNames.join("、")}</p><small>{formatDate(quote.createdAt)} · 有效至 {formatDate(quote.validUntil)}</small></div><div className={styles.quoteAmount}><strong>{formatQuoteAmount(quote.amount)}</strong><span className={cx(styles.quoteStatus, quote.status === "已接受" ? styles.quoteAccepted : quote.status === "审批中" ? styles.quoteReview : quote.status === "已过期" ? styles.quoteExpired : "")}>{quote.status}</span></div></div>)}</div> : <EmptyPanel icon={CircleDollarSign} title="还没有历史报价" detail="客户的既有报价会在这里作为复盘上下文展示。" />}</section>
       </div>
     </section>
   );
+}
+
+function CustomerForm({ onClose, onCreated }: { onClose: () => void; onCreated: (customer: Customer) => void }) {
+  const [form, setForm] = useState({ company: "", name: "", role: "", industry: "", location: "", email: "", phone: "", owner: "", source: "手动录入" });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true); setError("");
+    try { onCreated(await createCustomerViaApi(form)); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : "保存客户失败"); }
+    finally { setBusy(false); }
+  }
+  const update = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
+  return <div className={styles.todoModal} role="dialog" aria-modal="true" aria-label="新建客户"><form onSubmit={submit} className={styles.todoForm}><h2>新建真实客户</h2><p>只有你填写并成功保存到后端的内容才会出现在客户列表。</p>
+    <label>公司名称<input required maxLength={200} value={form.company} onChange={(event) => update("company", event.target.value)} /></label>
+    <label>联系人姓名<input required maxLength={120} value={form.name} onChange={(event) => update("name", event.target.value)} /></label>
+    <label>职位<input maxLength={120} value={form.role} onChange={(event) => update("role", event.target.value)} placeholder="可留空" /></label>
+    <label>行业<input maxLength={120} value={form.industry} onChange={(event) => update("industry", event.target.value)} placeholder="可留空" /></label>
+    <label>地区<input maxLength={200} value={form.location} onChange={(event) => update("location", event.target.value)} placeholder="可留空" /></label>
+    <label>邮箱<input type="email" maxLength={254} value={form.email} onChange={(event) => update("email", event.target.value)} placeholder="可留空" /></label>
+    <label>电话<input maxLength={60} value={form.phone} onChange={(event) => update("phone", event.target.value)} placeholder="可留空" /></label>
+    <label>负责人<input maxLength={120} value={form.owner} onChange={(event) => update("owner", event.target.value)} placeholder="可留空" /></label>
+    <label>数据来源<input required maxLength={120} value={form.source} onChange={(event) => update("source", event.target.value)} /></label>
+    {error && <p role="alert">{error}</p>}<div><button type="button" className={styles.secondaryButton} disabled={busy} onClick={onClose}>取消</button><button className={styles.primaryButton} disabled={busy || !form.company.trim() || !form.name.trim()}>{busy ? "保存中…" : "保存到后端"}</button></div>
+  </form></div>;
 }
 
 

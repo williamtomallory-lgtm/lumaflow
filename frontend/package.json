@@ -16,7 +16,7 @@
     "local:setup": "node scripts/local-model.mjs setup",
     "local:up": "node scripts/local-model.mjs up",
     "verify:local": "node scripts/verify-local-model.mjs",
-    "db:setup": "node --env-file-if-exists=.env.local scripts/seed-postgres.mjs"
+    "db:setup": "node --env-file-if-exists=.env.local scripts/setup-postgres.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai-compatible": "^3.0.44",

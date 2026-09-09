@@ -1,10 +1,11 @@
 import { z } from "zod";
-import { createFollowupSchema, followupTaskSchema, productSchema } from "../contracts/api";
+import { createCustomerSchema, createFollowupSchema, customerSchema, followupTaskSchema, productSchema } from "../contracts/api";
 import type { Product } from "../catalog";
 import type { FollowupTaskStatus } from "../crm";
 
 const productMutationResponseSchema = z.object({ data: productSchema, meta: z.object({ apiVersion: z.literal("v1"), requestId: z.string() }) });
 const followupMutationResponseSchema = z.object({ data: followupTaskSchema, meta: z.object({ apiVersion: z.literal("v1"), requestId: z.string() }) });
+const customerMutationResponseSchema = z.object({ data: customerSchema, meta: z.object({ apiVersion: z.literal("v1"), requestId: z.string() }) });
 
 export class BackendApiError extends Error {
   constructor(public status: number, public code: string, message: string) {
@@ -34,6 +35,10 @@ export async function createProductViaApi(product: Omit<Product, "id">) {
 export async function updateFollowupStatusViaApi(taskId: string, status: FollowupTaskStatus) {
   const payload = await requestJson(`/api/v1/followups/${encodeURIComponent(taskId)}`, { method: "PATCH", body: JSON.stringify({ status }) });
   return followupMutationResponseSchema.parse(payload).data;
+}
+
+export async function createCustomerViaApi(input: z.input<typeof createCustomerSchema>) {
+  return customerMutationResponseSchema.parse(await requestJson("/api/v1/customers", { method: "POST", body: JSON.stringify(input) })).data;
 }
 
 export async function createFollowupViaApi(input: z.infer<typeof createFollowupSchema>) {

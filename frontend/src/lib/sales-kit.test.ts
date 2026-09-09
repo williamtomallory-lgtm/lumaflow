@@ -21,7 +21,7 @@ describe("sales kit real originals", () => {
   it("rejects changed file sizes, demo originals and oversized exports", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("different")));
     await expect(buildSalesKitArchive(testProducts[0], "text", [entry])).rejects.toThrow("大小已变更");
-    await expect(buildSalesKitArchive(testProducts[0], "text", [{ ...entry, source: "demo" }])).rejects.toThrow("真实上传");
+    await expect(buildSalesKitArchive(testProducts[0], "text", [{ ...entry, source: "demo" as never }])).rejects.toThrow("真实上传");
     await expect(buildSalesKitArchive(testProducts[0], "text", [{ ...entry, sizeBytes: 101 * 1024 * 1024 }])).rejects.toThrow("100 MB");
   });
   it("escapes delimiters, quotes and spreadsheet formulas", () => {

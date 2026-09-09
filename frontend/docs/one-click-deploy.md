@@ -15,7 +15,7 @@
 
 1. 使用已有的 Node.js 22+；若没有，则下载固定的官方 Node.js `22.23.2` win-x64 zip 到 `.local-runtime/`，先核对 SHA-256，再解压到项目目录。整个过程不需要管理员权限。
 2. 首次缺少依赖或 `package-lock.json` 改变时运行 `npm ci --no-audit --no-fund`；后续运行复用已匹配的 `node_modules`。
-3. 仅当 `.env.local` 和 `.env` 都不存在时，才根据 `.env.example` 创建带有明确 `DATA_SOURCE=json`、空 `DATABASE_URL` 的本地演示 `.env.local`。已有环境文件一律保留，不会覆盖或打印其中的值。内置 `local-qwen3-8b`/`local-qwen3-14b` 档位使用 loopback Ollama，不需要付费 API key。
+3. 仅当 `.env.local` 和 `.env` 都不存在时，才根据 `.env.example` 创建空 `DATABASE_URL` 的 `.env.local`；运行时业务集合从空本地存储开始，不载入测试 fixture。已有环境文件一律保留，不会覆盖或打印其中的值。内置 `local-qwen3-8b`/`local-qwen3-14b` 档位使用 loopback Ollama，不需要付费 API key。
 4. 使用项目内固定 Ollama 运行时；默认缺少 `lumaflow-qwen3-8b:latest` 时拉取 8B 模型。已存在的运行时、模型 blob 和服务会复用，不会重复下载。
 5. 首次启动或源文件、依赖锁文件、Next 配置、环境文件改变时运行 `next build`；否则复用已有 `.next` 生产构建。
 6. 只绑定 `127.0.0.1`，等待 `/api/v1/health` 与所选模型的 `/api/v1/assistant/models` 检查都成功后，打开 `http://127.0.0.1:3000`。

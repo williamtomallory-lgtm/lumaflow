@@ -422,14 +422,13 @@ function Ensure-LumaFlowEnvironment {
         return ".env"
     }
     if (Test-Path -LiteralPath $example -PathType Leaf) {
-        # A clean clone is an explicit local demo: do not make it attempt the
-        # placeholder PostgreSQL URL from .env.example. This only transforms
+        # A clean clone starts with empty local runtime storage: do not make it
+        # attempt the placeholder PostgreSQL URL from .env.example. This transforms
         # the newly-created file; existing .env/.env.local bytes stay intact.
         $content = Get-Content -LiteralPath $example -Raw -ErrorAction Stop
         $content = [regex]::Replace($content, "(?m)^DATABASE_URL=.*$", "DATABASE_URL=")
-        if ($content -notmatch "(?m)^DATA_SOURCE=") { $content = "DATA_SOURCE=json`r`n" + $content }
         Set-Content -LiteralPath $local -Value $content -Encoding UTF8 -NoNewline
-        Write-LumaFlowLog -Message "Created .env.local with explicit DATA_SOURCE=json demo defaults because no environment file existed. Placeholder values were not printed."
+        Write-LumaFlowLog -Message "Created .env.local with an empty DATABASE_URL; runtime business collections start empty. Placeholder values were not printed."
         return ".env.local"
     }
     Write-LumaFlowLog -Level WARN -Message "No .env, .env.local, or .env.example exists. The app can still use its built-in local model profile, but optional server settings are unset."

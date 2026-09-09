@@ -8,10 +8,10 @@
 |---|---|---|---|
 | 前端静态配置 | 前端发布包 | 导航名称、页面标题、按钮文案、推荐提问模板 | `src/config/ui-static.ts` |
 | 后端动态数据 | 后端/数据库 | 产品、SKU、库存、成本、客户、会话、报价、跟进、日志、统计 | `/api/v1/*` |
-| JSON 种子数据 | 后端启动/开发环境 | 无 PostgreSQL 时的可审查演示数据，以及数据库初始化数据 | `src/data/*.json` |
+| 测试 fixture | 测试运行器 | 只验证组件和业务规则，禁止进入运行时 | `src/test/fixtures-data/*.fixture.json` |
 | 密钥和连接信息 | 服务器环境 | `DATABASE_URL`、`API_WRITE_TOKEN` | `.env.local`，禁止提交 |
 
-浏览器不再直接导入 `src/data/*.json`。页面先显示静态加载状态，收到 `/api/v1/bootstrap` 的动态响应并通过 Zod 契约校验后，才渲染产品和业务模块。
+浏览器和生产服务端都不导入测试 fixture。页面先显示静态加载状态，收到 `/api/v1/bootstrap` 的动态响应并通过 Zod 契约校验后，才渲染产品和业务模块；空后端必须显示空状态。
 
 ## 2. 推荐架构
 
@@ -24,7 +24,7 @@ flowchart LR
   SEC --> SVC[应用服务\nDTO·查询·业务规则]
   SVC --> DAL[server-only DAL\nRepository]
   DAL --> PG[(PostgreSQL)]
-  DAL -.开发回退/初始化.-> JSON[JSON Seed Files]
+  DAL -.未配置数据库.-> LOCAL[Ignored local runtime store]
   SVC --> AUDIT[(Audit Events)]
   API --> AGENT[Qwen ToolLoopAgent]
   AGENT -->|受控只读工具| SVC
@@ -93,7 +93,7 @@ v1 采用聚合根 JSONB：`products`、`customers` 等表以 `id` 为关系主�
 | GET | `/api/v1/assistant/health` | 检查 Qwen/vLLM 配置与可达性 | 已实现 |
 | POST | `/api/v1/assistant/chat` | SSE 流式 Agent 与受控工具调用 | 已实现 |
 
-读取端点可在本地演示环境使用 JSON 回退；写入端点只允许写 PostgreSQL，不会修改 Git 中的 JSON 种子文件。
+读取端点只返回 PostgreSQL 或后端本地存储中的业务记录；测试 fixture 不会进入运行时。写入端点不会修改 Git 中的任何测试数据文件。
 
 ## 6. 安全设计
 
@@ -102,7 +102,7 @@ v1 采用聚合根 JSONB：`products`、`customers` 等表以 `id` 为关系主�
 - 数据库模块标记为 `server-only`，连接串不进入浏览器包。
 - 所有输入和后端输出均经过 Zod 校验；JSON 请求限制为 256 KB。
 - SQL 值全部参数化；动态表名仅允许内部联合类型白名单。
-- 默认禁用持久化写入。写入需同源且显式启用 `DEMO_WRITES_ENABLED=true`，或使用服务器间 Bearer `API_WRITE_TOKEN`。
+- 默认禁用持久化写入。写入需同源且显式启用 `LUMAFLOW_WRITES_ENABLED=true`，或使用服务器间 Bearer `API_WRITE_TOKEN`。
 - 写入记录 `audit_events`，并关联 Request ID。
 - 单实例内存限流，错误响应不泄露堆栈或数据库凭据。
 - 默认同源，无宽泛 CORS；响应包含防嗅探、防嵌入、Referrer 和 Permissions Policy 等安全头。
@@ -123,15 +123,15 @@ v1 采用聚合根 JSONB：`products`、`customers` 等表以 `id` 为关系主�
 ## 7. 数据流验证标准
 
 1. `/api/v1/bootstrap` 返回 `meta.source`、`requestId` 和 `generatedAt`。
-2. 页面显示“动态数据 · JSON/PostgreSQL/JSON 回退”。
-3. API 中产品数量、第一条产品 ID 与页面渲染一致。
-4. 暂时修改 JSON 种子并重启时，API/UI 同时变化；前端静态配置不变化。
+2. 页面显示“动态数据 · 本地存储/PostgreSQL/本地存储（数据库不可用）”。
+3. 空数据库与空本地存储必须返回空集合，页面显示空状态，不能出现 fixture 产品或客户。
+4. 测试 fixture 只允许被测试代码导入，修改它不能改变 API/UI 的运行数据。
 5. 配置 PostgreSQL 后执行 `npm run db:setup`，`/api/v1/health` 的 `database.reachable` 应为 `true`，页面来源应为 `PostgreSQL`。
 
 ## 8. 当前边界
 
 - 已实现真实的前后端读取通信和 PostgreSQL 写入端点。
 - 已实现 Qwen/vLLM OpenAI-compatible 流式适配、五步 Agent Loop、六个受控工具及页面工具轨迹。
-- 当前本机未提供真实 `DATABASE_URL`，因此只能验证 JSON 读取和数据库故障回退，不能声称已连接用户的 PostgreSQL。
+- 当前本机未提供真实 `DATABASE_URL`，因此只能验证后端本地存储和数据库故障回退，不能声称已连接用户的 PostgreSQL。
 - 当前本机未提供真实 Qwen/vLLM GPU 服务，因此协议可用模拟服务完整验证，但不能声称已验证真实模型输出质量或吞吐。
 - 现有 UI 的新增/编辑交互仍以本地会话为主；API 已具备持久化端点，下一步逐模块把表单提交切到写 API，并接入真实身份授权。

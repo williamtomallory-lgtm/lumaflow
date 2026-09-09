@@ -103,7 +103,7 @@ export async function GET(request: Request) {
     return apiJson({
       data,
       summary: buildKnowledgeSummary(allRecords),
-      meta: { apiVersion: "v1" as const, requestId: id, source: "local-files" as const, demoEntriesExcluded: true as const, limit: query.limit, offset: query.offset },
+      meta: { apiVersion: "v1" as const, requestId: id, source: "local-files" as const, fixturesExcluded: true as const, limit: query.limit, offset: query.offset },
     }, 200, id);
   } catch (error) {
     return knowledgeError(error, id);

@@ -1,6 +1,6 @@
 # LumaFlow Sales Hub
 
-面向照明销售团队的本地知识库与销售 Agent 工作台。支持本机 Qwen3 8B / 14B 推理，不需要付费模型 API；产品、库存、CRM 与报价当前仍包含演示数据，不等于已接通公司的生产系统。
+面向照明销售团队的本地知识库与销售 Agent 工作台。支持本机 Qwen3 8B / 14B 推理，不需要付费模型 API。运行时不再加载内置产品、库存、CRM 或跟进样本；未接入数据时明确显示空状态。
 
 产品目标是可自行部署、可持续积累的本地销售 Agent。本轮知识归档、角色工作台与安全边界见 [`docs/knowledge-agent-workspace.md`](docs/knowledge-agent-workspace.md)。长期记忆、数据库和部署规划见 [`docs/local-agent-blueprint.md`](docs/local-agent-blueprint.md)。原文件和分类结果可以持久积累；自动客户记忆、工作簿到 CRM 的结构化导入、完整 CRM 写入仍待实现。
 
@@ -71,32 +71,31 @@ Chat 和 Work 共用输入框内的模型菜单，可选择模型系列与 8B / 
 
 如果还看到旧标题“自然语言、图片和附件，一处搜索”，请确认最新代码已重新构建、重启服务，再强制刷新页面。旧智能搜索曾使用本地规则直接拼答案，不能作为真实模型验收；新入口不会预填答案或伪造引用，失败时也不会用规则答案替代模型。
 
-`npm run verify:local` 会实际请求本机模型，核验产品查询、库存工具输出、流式回复与 GPU 模型加载信息，不使用协议模拟器。业务数据目前仍是 JSON 演示种子，不代表真实公司库存。
+`npm run verify:local` 会实际请求本机模型并核验流式回复与 GPU 模型加载信息，不使用协议模拟器。产品和库存只能来自 PostgreSQL 或后端本地存储。
 
 ## 数据文件
 
 数据已经按所有权明确分离：
 
-- `src/config/ui-static.ts`：前端发布时即可确定的导航、页面文案、推荐问题和静态演示身份
+- `src/config/ui-static.ts`：前端发布时即可确定的导航、页面文案和推荐问题；不包含业务记录或用户身份
 - `src/config/agent-roles.ts`：前端静态角色名称、说明与输入提示；后端角色指令和工具权限位于 `src/lib/ai/agent-roles.ts`
-- `.local-data/knowledge/`：真实上传原件和分类元数据（Git 忽略，需自行备份），由知识库 API 读取；不会混入 Git 中的演示 JSON
+- `.local-data/knowledge/`：真实上传原件和分类元数据（Git 忽略，需自行备份），由知识库 API 读取
+- `.local-data/business/records.json`：未配置 PostgreSQL 时由后端 API 写入的本机产品、客户和跟进记录（Git 忽略）
 - `/api/v1/bootstrap`：产品、库存、客户、报价、跟进、日志与统计等后端动态数据的唯一页面入口
-- `src/lib/server/json-data.ts`：带 `server-only` 保护的 JSON 读取器，浏览器不能直接引用
+- `src/lib/server/runtime-data.ts`：新安装的空运行时结构，不包含样本业务记录
 
-后端开发种子数据位于：
+虚构记录只作为测试 fixture 保存在：
 
-- `src/data/catalog.json`：产品、SKU、参数、库存、资料与产品知识
-- `src/data/business.json`：知识库、汇率、报价历史、用户、AI 日志与数据质量问题
-- `src/data/crm.json`：客户、联系人、会话、需求、历史报价与跟进任务
+- `src/test/fixtures-data/*.fixture.json`
 
-业务函数只保留类型、查询和计算逻辑。没有配置数据库时，后端 API 读取这些 JSON 文件，方便修改、审查和版本管理；页面仍然必须等待 API 响应，不能直接导入种子数据。
+测试 fixture 只被测试入口导入，生产构建和 API 不会读取。没有配置数据库时，后端 API 只读取被 Git 忽略的本地运行数据；新安装时所有业务集合为空。
 
 ## 后端 API
 
 - `GET /api/v1/bootstrap`：页面首屏动态数据与真实派生指标
 - `GET /api/v1/health`：当前数据源与 PostgreSQL 可达性
 - `GET/POST /api/v1/products`、`GET/PATCH /api/v1/products/{id}`
-- `GET /api/v1/customers`
+- `GET/POST /api/v1/customers`
 - `GET /api/v1/followups`、`PATCH /api/v1/followups/{id}`
 - `GET /api/v1/assistant/models`：服务器允许选择的模型目录与连接状态
 - `GET /api/v1/assistant/health?modelProfileId=local-qwen3-8b`：所选模型配置与可达性
@@ -112,18 +111,18 @@ Chat 和 Work 共用输入框内的模型菜单，可选择模型系列与 8B / 
 
 1. 复制 `.env.example` 为 `.env.local`，填写真实的 `DATABASE_URL`。
 2. 确保目标 PostgreSQL 数据库已经创建。
-3. 初始化表结构并把 JSON 数据写入 PostgreSQL：
+3. 初始化空表结构（不会写入样本业务数据）：
 
 ```bash
 npm run db:setup
 npm run dev
 ```
 
-应用启动后访问 [http://localhost:3000/api/data-source](http://localhost:3000/api/data-source)，`source` 为 `postgres` 表示页面正在读取 PostgreSQL；未配置连接时为 `json`。连接异常时默认安全回退为 `json-fallback`，生产环境可设置 `POSTGRES_REQUIRED=true` 禁止回退。
+应用启动后访问 [http://localhost:3000/api/data-source](http://localhost:3000/api/data-source)，`source` 为 `postgres` 表示页面正在读取 PostgreSQL；未配置连接时为 `local`。连接异常时默认回退到不含样本记录的 `local-fallback`，生产环境可设置 `POSTGRES_REQUIRED=true` 禁止回退。
 
-产品和跟进等业务持久化写操作默认关闭。接好身份系统前，可为同源开发环境设置 `DEMO_WRITES_ENABLED=true`；服务器间调用可配置 `API_WRITE_TOKEN`。这些业务 API 只写 PostgreSQL 并同步记录审计事件，绝不会改写 Git 中的 JSON 文件。知识文件归档独立写入 `.local-data/knowledge/`，不依赖 PostgreSQL；它使用本机同源检查或 `ASSISTANT_API_TOKEN`，不受 `DEMO_WRITES_ENABLED` 控制。
+产品、客户和跟进等业务持久化写操作默认关闭。接好身份系统前，可为同源本机环境设置 `LUMAFLOW_WRITES_ENABLED=true`；服务器间调用可配置 `API_WRITE_TOKEN`。这些业务 API 写入 PostgreSQL或被 Git 忽略的后端本地存储，绝不会读取或改写测试 fixture。知识文件归档独立写入 `.local-data/knowledge/`，不依赖 PostgreSQL；它使用本机同源检查或 `ASSISTANT_API_TOKEN`，不受 `LUMAFLOW_WRITES_ENABLED` 控制。
 
-数据库结构位于 `database/schema.sql`，初始化脚本位于 `scripts/seed-postgres.mjs`。连接串只应写入被 Git 忽略的 `.env.local`，不要提交真实密码。
+数据库结构位于 `database/schema.sql`，空库初始化脚本位于 `scripts/setup-postgres.mjs`。连接串只应写入被 Git 忽略的 `.env.local`，不要提交真实密码。
 
 ## 验证命令
 
@@ -134,9 +133,9 @@ npm run build
 npm run verify:api
 ```
 
-`verify:api` 需在本地服务运行时执行；它会把 API 返回的产品数量、首条 ID 和 SKU 与 JSON 种子逐项比对，并检查筛选、输入拒绝、默认禁写、请求 ID、无缓存和安全响应头。
+`verify:api` 需在本地服务运行时执行；它会确认运行 API 没有返回任何测试 fixture ID，并检查空结果、输入拒绝、默认禁写、请求 ID、无缓存和安全响应头。
 
-`node scripts/verify-knowledge-agent.mjs` 使用真实本机 8B 验证上传、分类、去重、原件下载与微信客服文件引用；会保留明确标记的虚构验收样本。`npm run verify:local -- --model=14b` 验证 14B 的真实业务工具调用。模拟测试与真实模型验收不能互相替代。
+`node scripts/verify-knowledge-agent.mjs` 使用真实本机 8B 验证上传、分类、去重、原件下载与微信客服文件引用；验收结束会删除本轮临时文件。`npm run verify:local -- --model=14b` 验证 14B 的真实工具调用。模拟测试与真实模型验收不能互相替代。
 
 ## 接入 Qwen / vLLM
 
@@ -193,8 +192,6 @@ npm run dev
 
 ## 当前数据边界
 
-当前目录内的数据仍是可替换的演示数据，但读取入口已经统一为“PostgreSQL 优先、JSON 兜底”的服务端数据仓库。产品新增表单在 PostgreSQL 数据源下已调用持久化 API；其他尚未接写 API 的编辑交互会明确保持在当前会话。身份认证与细粒度权限校验仍须在正式上线前完成。
+运行时没有内置业务记录。PostgreSQL 已配置且可达时只读取数据库；否则只读取 Git 忽略的本地业务存储。产品、客户和跟进的创建会通过后端持久化，空库保持为空，不会从测试 fixture 自动补齐。身份认证与细粒度权限校验仍须在正式上线前完成。
 
-目前 Repository 的空表会回填 JSON 演示记录，初始化脚本也会按种子 ID 更新数据。因此接真实公司数据前，还必须拆开数据库迁移与演示导入、允许正式空集合并取消自动混入演示数据。不要把当前种子初始化脚本直接用于已有业务数据库。
-
-进入生产使用前，还应接入企业对象存储、真实消息渠道、审批通知和财务汇率。销售助手的“确认并记录”不会自动向外部客户发送消息；智能搜索不提供未经接入的图片/附件正文识别；正式报价不能直接依赖演示价格或固定汇率。
+进入生产使用前，还应接入企业对象存储、真实消息渠道、审批通知和财务汇率。销售助手不会自动向外部客户发送消息；智能搜索不提供未经接入的图片/附件正文识别；未配置真实汇率时，报价工具会拒绝生成金额，不会使用固定假汇率。

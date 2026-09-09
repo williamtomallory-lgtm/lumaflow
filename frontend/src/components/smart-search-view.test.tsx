@@ -86,7 +86,7 @@ describe("smart search real-model entry", () => {
     expect(posts[0]).toMatchObject({ modelProfileId: "local-qwen3-8b", mode: "instant", messages: [{ role: "user", parts: [{ type: "text", text: "测试库存问题" }] }] });
     expect(screen.getByTestId("search-evidence")).toHaveTextContent("LT-ARC-T18-BK 库存 126");
     expect(screen.getByTestId("search-evidence")).toHaveTextContent("核对时间");
-    expect(screen.getByText(/本轮数据源：json/)).toBeInTheDocument();
+    expect(screen.getByText(/本轮数据源：local/)).toBeInTheDocument();
     await ready();
     fireEvent.change(screen.getByRole("textbox", { name: "输入产品问题" }), { target: { value: "第二次问题" } });
     fireEvent.click(screen.getByRole("button", { name: "发送问题" }));

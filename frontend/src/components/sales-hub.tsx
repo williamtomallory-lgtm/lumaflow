@@ -25,7 +25,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useState } from "react";
-import { DEMO_PROFILE, PRIMARY_NAV, SECONDARY_NAV, VIEW_META, type StaticNavItem, type View } from "@/config/ui-static";
+import { PRIMARY_NAV, SECONDARY_NAV, VIEW_META, type StaticNavItem, type View } from "@/config/ui-static";
 import { useBackendData } from "@/hooks/use-backend-data";
 import type { DashboardSummary } from "@/lib/contracts/api";
 import type { AppDataSnapshot } from "@/lib/data-snapshot";
@@ -80,7 +80,7 @@ function SalesHubWorkspace({ initialData, dashboard, generatedAt, refreshing, on
   const openFollowup = initialData.followupTasks.find((task) => task.status === "open");
   const qualityIssue = initialData.qualityIssues[0];
   const notificationCount = Number(Boolean(openFollowup)) + Number(Boolean(qualityIssue));
-  const sourceLabel = initialData.source === "postgres" ? "PostgreSQL" : initialData.source === "json-fallback" ? "JSON 回退" : "JSON";
+  const sourceLabel = initialData.source === "postgres" ? "PostgreSQL" : initialData.source === "local-fallback" ? "本地存储（数据库不可用）" : "本地存储";
 
   function navigate(next: View) {
     setView(next);
@@ -135,8 +135,8 @@ function SalesHubWorkspace({ initialData, dashboard, generatedAt, refreshing, on
         </div>
 
         <div className="profile-row">
-          <div className="avatar">{DEMO_PROFILE.initials}</div>
-          <div><strong>{DEMO_PROFILE.name}</strong><small>{DEMO_PROFILE.role} · 静态演示身份</small></div>
+          <div className="avatar">本</div>
+          <div><strong>本地工作区</strong><small>尚未连接用户身份</small></div>
           <Settings size={17} />
         </div>
       </aside>
@@ -169,7 +169,7 @@ function SalesHubWorkspace({ initialData, dashboard, generatedAt, refreshing, on
             <div><span className="eyebrow">{meta.eyebrow}</span><h1>{meta.title}</h1><p>{meta.subtitle}</p></div>
           </div>}
 
-          {view === "knowledge" && <KnowledgeBaseView key={`knowledge-${knowledgeSearchVersion}`} initialEntries={initialData.knowledgeEntries} products={catalog} assets={catalogAssets} dataSource={initialData.source} initialQuery={globalQuery} section={knowledgeSection} onSectionChange={setKnowledgeSection} kitProductId={kitProductId} onOpenProduct={setSelectedProduct} onToast={showToast} />}
+          {view === "knowledge" && <KnowledgeBaseView key={`knowledge-${knowledgeSearchVersion}`} products={catalog} assets={catalogAssets} dataSource={initialData.source} initialQuery={globalQuery} section={knowledgeSection} onSectionChange={setKnowledgeSection} kitProductId={kitProductId} onOpenProduct={setSelectedProduct} onToast={showToast} />}
           {view === "agents" && <AgentManagement onToast={showToast} />}
           {isChat && <AgentWorkspace key={view} products={catalog} assets={catalogAssets} customers={initialData.customers} initialExperience={view === "salesAssistant" ? "work" : "chat"} initialMessage={view === "salesAssistant" ? crmAnalysisMessage : globalQuery} initialCustomerId={view === "salesAssistant" ? crmCustomerId : undefined} preferredRoleId={view === "salesAssistant" ? "sales-review" : undefined} selectAllKnowledge={view === "salesAssistant"} onOpenProduct={setSelectedProduct} onOpenCustomer={(id) => { setCrmCustomerId(id); navigate("customers"); }} onOpenKnowledge={() => navigate("knowledge")} onToast={showToast} onAddToKit={openSalesKit} />}
           {view === "customers" && <CustomersView customers={initialData.customers} initialCustomerId={crmCustomerId} onOpenCustomer={setCrmCustomerId} onAnalyzeCustomer={(customer) => { setCrmCustomerId(customer.id); setCrmAnalysisMessage(buildCustomerReviewPrompt(customer)); navigate("salesAssistant"); }} onToast={showToast} />}

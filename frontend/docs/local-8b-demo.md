@@ -73,6 +73,6 @@ npm run verify:local -- --recommend
 
 `--recommend` 额外验证自然语言选型、规格与附件工具。当前附件工具没有可信下载 URL，服务端会按行处理模型文本，将单行 Markdown 链接转为资料名称，再发送给前端（`X-Output-Policy: attachment-names-v1`）。这不是模型自己保证不编链接，也不是完整的 URL 安全过滤或事实审核；产品、库存及工具结果不被此格式处理改写。未来支持真实下载链接时应改为服务端签发的附件卡片。
 
-当前客户、产品、库存仍为服务端 JSON 演示数据。已有 PostgreSQL 接口不等于本机已配置数据库。真实公司数据、长期客户记忆、工作簿导入、用户鉴权和多用户权限仍需后续实现；此版本不是可直接暴露公网的多人生产系统。模型可能选错产品或理解错需求，最终答复仍须人工审核。
+当前运行时不内置客户、产品或库存。真实记录必须通过后端写入 PostgreSQL，或在未配置 PostgreSQL 时写入 Git 忽略的本地存储；测试 fixture 不进入 API。长期客户记忆、工作簿导入、用户鉴权和多用户权限仍需后续实现；此版本不是可直接暴露公网的多人生产系统。模型可能误解问题，最终答复仍须人工审核。
 
 官方依据：[Ollama Qwen3:8b 参数与量化](https://ollama.com/library/qwen3:8b)、[Windows 安装](https://docs.ollama.com/windows)、[OpenAI 兼容接口](https://docs.ollama.com/api/openai-compatibility)。实机记录见 [本机验证记录](verification-local-8b.md)。

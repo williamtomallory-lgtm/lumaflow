@@ -24,6 +24,6 @@ export async function buildSalesKitArchive(product: Product, message: string, en
     zip.file(`附件/${index + 1}-${safeName}`, data);
   }
   zip.file("03-附件清单.txt", entries.length ? entries.map((entry) => `${entry.originalName} · ${entry.sizeLabel} · ${entry.category ?? "未分类"}`).join("\n") : "未选择任何上传原件。产品目录中的附件名称仅是元数据，不代表本包包含原件。");
-  zip.file("README.txt", "本包包含推荐话术、产品参数以及你明确选择的知识库原件。请在发送前检查价格、个人信息、客户聊天记录和内部资料。参考价格不构成正式报价；产品目录演示数据需自行核实。未自动发送到微信。\n");
+  zip.file("README.txt", "本包包含推荐话术、产品参数以及你明确选择的知识库原件。请在发送前检查价格、个人信息、客户聊天记录和内部资料。参考价格不构成正式报价；所有产品字段均需对照真实业务来源核实。未自动发送到微信。\n");
   return zip;
 }

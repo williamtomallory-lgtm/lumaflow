@@ -55,7 +55,7 @@ try {
 
     $example = Join-Path $testRoot ".env.example"
     $local = Join-Path $testRoot ".env.local"
-    Set-Content -LiteralPath $example -Value "DATABASE_URL=`nDEMO_WRITES_ENABLED=false`n" -Encoding UTF8 -NoNewline
+    Set-Content -LiteralPath $example -Value "DATABASE_URL=`nLUMAFLOW_WRITES_ENABLED=false`n" -Encoding UTF8 -NoNewline
     Set-Content -LiteralPath $local -Value "DATABASE_URL=postgresql://private-sentinel`n" -Encoding UTF8 -NoNewline
     $before = Get-LumaFlowBytes -Path $local
     Ensure-LumaFlowEnvironment -Root $testRoot | Out-Null
@@ -71,7 +71,7 @@ try {
     Ensure-LumaFlowEnvironment -Root $testRoot | Out-Null
     Assert-LumaFlowTest (Test-Path -LiteralPath $local) "missing environment files get a one-time .env.local setup"
     $createdText = Get-Content -LiteralPath $local -Raw
-    Assert-LumaFlowTest ($createdText -match '(?m)^DATA_SOURCE=json\s*$') "new-machine environment explicitly selects the JSON demo"
+    Assert-LumaFlowTest ($createdText -notmatch '(?m)^DATA_SOURCE=') "new-machine environment does not select a fixture data source"
     Assert-LumaFlowTest ($createdText -match '(?m)^DATABASE_URL=\s*$') "new-machine environment does not attempt the example PostgreSQL URL"
     $createdBytes = Get-LumaFlowBytes -Path $local
     Ensure-LumaFlowEnvironment -Root $testRoot | Out-Null

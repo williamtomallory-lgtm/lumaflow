@@ -110,7 +110,7 @@ export function quantityFactor(quantity: number) {
   return 1;
 }
 
-export function calculateQuote(lines: QuoteLine[], currency: Currency, catalog: Product[], currencyRates: Record<Currency, number>): QuoteTotals {
+export function calculateQuote(lines: QuoteLine[], currency: Currency, catalog: Product[], currencyRates: Partial<Record<Currency, number>>): QuoteTotals {
   let subtotal = 0;
   let afterTier = 0;
   let afterDiscount = 0;
@@ -126,12 +126,14 @@ export function calculateQuote(lines: QuoteLine[], currency: Currency, catalog: 
     afterDiscount += discounted;
   }
 
+  const rate = currencyRates[currency];
+  if (rate === undefined) throw new Error(`currency rate ${currency} is unavailable`);
   return {
     subtotal,
     tierSavings: subtotal - afterTier,
     discountSavings: afterTier - afterDiscount,
     totalCny: afterDiscount,
-    total: afterDiscount * currencyRates[currency],
+    total: afterDiscount * rate,
     currency,
   };
 }

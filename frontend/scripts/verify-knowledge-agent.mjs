@@ -46,4 +46,10 @@ assert.ok(!events.some((event) => event.type === "error"));
 const answer = events.filter((event) => event.type === "text-delta").map((event) => event.delta).join("");
 assert.ok(answer.includes("30"), answer);
 assert.ok(answer.includes("黑"), answer);
-console.log(JSON.stringify({ ok: true, documentId, archiveDocumentId: archived.data.id, sampleNames: [upload.data.originalName, archived.data.originalName], classification: upload.data.category, title: upload.data.title, summary: upload.data.summary, coverage, answer, note: "Two clearly named synthetic QA samples are retained locally for restart/browser verification; no company documents were used." }, null, 2));
+for (const id of [documentId, archived.data.id]) {
+  const removed = await fetch(`${base}/api/v1/knowledge/${id}`, { method: "DELETE", headers: { origin } });
+  assert.equal(removed.status, 200, await removed.clone().text());
+}
+const afterCleanup = await (await fetch(`${base}/api/v1/knowledge`, { headers: { origin } })).json();
+assert.equal(afterCleanup.data.some((document) => [documentId, archived.data.id].includes(document.id)), false);
+console.log(JSON.stringify({ ok: true, classification: upload.data.category, title: upload.data.title, summary: upload.data.summary, coverage, answer, syntheticSamplesRemoved: true, note: "Synthetic QA uploads were deleted after verification; no company documents were used." }, null, 2));

@@ -40,7 +40,7 @@ export const knowledgeClassificationStatusSchema = z.enum([
 
 export const knowledgeClassificationSourceSchema = z.enum(["model", "manual", "none"]);
 export const knowledgeParseStatusSchema = z.enum(["parsed", "archive_only", "parse_failed"]);
-export const knowledgeStorageSourceSchema = z.enum(["uploaded", "demo"]);
+export const knowledgeStorageSourceSchema = z.literal("uploaded");
 
 export type KnowledgeClassificationStatus = z.infer<typeof knowledgeClassificationStatusSchema>;
 export type KnowledgeClassificationSource = z.infer<typeof knowledgeClassificationSourceSchema>;
@@ -176,7 +176,7 @@ export type KnowledgeListResponse = {
     apiVersion: "v1";
     requestId: string;
     source: "local-files";
-    demoEntriesExcluded: true;
+    fixturesExcluded: true;
     limit: number;
     offset: number;
   };
@@ -198,7 +198,7 @@ export const knowledgeListResponseSchema: z.ZodType<KnowledgeListResponse> = z.o
     apiVersion: z.literal("v1"),
     requestId: z.string().min(1),
     source: z.literal("local-files"),
-    demoEntriesExcluded: z.literal(true),
+    fixturesExcluded: z.literal(true),
     limit: z.number().int().positive(),
     offset: z.number().int().nonnegative(),
   }),

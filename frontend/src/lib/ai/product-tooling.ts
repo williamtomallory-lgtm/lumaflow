@@ -155,6 +155,7 @@ export function searchKnowledgeRecords(query: string, sku: string | undefined, s
 export function createQuoteDraftRecord(input: { sku: string; quantity: number; discountPercent: number; customerId?: string }, snapshot: AppDataSnapshot) {
   const product = snapshot.products.find((item) => item.sku.toLowerCase() === input.sku.trim().toLowerCase());
   if (!product) return { created: false as const, reason: "PRODUCT_NOT_FOUND", draft: null };
+  if (snapshot.currencyRates.CNY === undefined) return { created: false as const, reason: "CURRENCY_RATE_UNAVAILABLE", draft: null };
   const line = { id: "agent-draft-line", productId: product.id, quantity: input.quantity, discount: input.discountPercent };
   const totals = calculateQuote([line], "CNY", snapshot.products, snapshot.currencyRates);
   return {

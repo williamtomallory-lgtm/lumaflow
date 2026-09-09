@@ -10,7 +10,7 @@ describe("production loopback origin normalization", () => {
     const request = new Request(url, { headers: { host: "127.0.0.1:3010", origin: "http://127.0.0.1:3010", "sec-fetch-site": "same-origin" } });
     expect(() => authorizeAssistantRequest(request)).not.toThrow();
     expect(() => authorizeLocalKnowledgeRead(request)).not.toThrow();
-    vi.stubEnv("DEMO_WRITES_ENABLED", "true");
+    vi.stubEnv("LUMAFLOW_WRITES_ENABLED", "true");
     expect(() => authorizeWrite(request)).not.toThrow();
   });
   it("rejects different origins, DNS rebinding names, ports, and spoofed proxy headers", () => {

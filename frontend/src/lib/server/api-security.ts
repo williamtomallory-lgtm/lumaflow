@@ -63,7 +63,7 @@ export function authorizeWrite(request: Request) {
   const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
   if (configuredToken && bearer && safeTokenEqual(bearer, configuredToken)) return;
 
-  if (process.env.DEMO_WRITES_ENABLED !== "true") {
+  if (process.env.LUMAFLOW_WRITES_ENABLED !== "true") {
     throw new ApiHttpError(503, "WRITES_DISABLED", "Persistent writes are disabled until authentication or an API write token is configured.");
   }
 
@@ -85,7 +85,7 @@ export function authorizeAssistantRequest(request: Request) {
   }
 }
 
-// Private uploaded files have stricter reads than the demo catalog. This is a
+// Private uploaded files have stricter reads than the public runtime catalog. This is a
 // loopback workstation boundary, not multi-user authentication.
 export function authorizeLocalKnowledgeRead(request: Request) {
   const configuredToken = process.env.ASSISTANT_API_TOKEN;
