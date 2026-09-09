@@ -59,7 +59,7 @@ beforeEach(() => {
     }
     if (url.endsWith("/cowagent/agents")) return Response.json({ data: { defaultAgentId: "sales-consultant", revision: "test-roster", agents: [
       { id: "sales-consultant", name: "产品销售顾问", description: "查产品和库存", enabled: true, workspace: "agents/sales-consultant", knowledgeMode: "shared" },
-      { id: "wechat-service", name: "微信客服 Agent", description: "整理微信私聊", enabled: true, workspace: "agents/wechat-service", knowledgeMode: "shared", botType: "weixin_personal" },
+      { id: "wechat-service", name: "微信客服 Agent", description: "整理微信私聊", enabled: true, workspace: "agents/wechat-service", knowledgeMode: "shared", agentType: "weixin_personal" },
       { id: "sales-review", name: "销售复盘 Agent", description: "复盘销售记录", enabled: true, workspace: "agents/sales-review", knowledgeMode: "own" },
       { id: "moments-operator", name: "朋友圈运营 Agent", description: "生成待审核内容", enabled: true, workspace: "agents/moments-operator", knowledgeMode: "shared" },
     ] } });

@@ -8,8 +8,8 @@ from channel.wecom_bot.wecom_bot_channel import WecomBotChannel
 
 
 class _Registry:
-    def __init__(self, bot_type):
-        self.profile = SimpleNamespace(id="sales", bot_type=bot_type)
+    def __init__(self, agent_type):
+        self.profile = SimpleNamespace(id="sales", agent_type=agent_type)
 
     def get(self, agent_id, require_enabled=True):
         assert agent_id == "sales"
@@ -17,8 +17,8 @@ class _Registry:
 
 
 class _Service:
-    def __init__(self, bot_type):
-        self.registry = _Registry(bot_type)
+    def __init__(self, agent_type):
+        self.registry = _Registry(agent_type)
 
     def _load(self):
         return {}

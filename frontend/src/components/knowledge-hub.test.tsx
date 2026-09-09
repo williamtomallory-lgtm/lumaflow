@@ -2,7 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeHub } from "./knowledge-hub";
-import { testKnowledge } from "../test/fixtures";
+import { testAssets, testKnowledge, testProducts } from "../test/fixtures";
 import type { KnowledgeEntry } from "../lib/knowledge/contracts";
 
 vi.mock("@/hooks/use-model-catalog", () => ({ useModelCatalog: () => ({
@@ -53,6 +53,13 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("Knowledge hub", () => {
+  it("shows products and their former asset-center files in the unified knowledge page", async () => {
+    render(<KnowledgeHub initialEntries={[]} products={testProducts} assets={testAssets} onToast={onToast} />);
+    await screen.findByText("还没有真实上传文件");
+    expect(screen.getByRole("region", { name: "统一产品与资料目录" })).toHaveTextContent(testProducts[0].name);
+    expect(screen.getByRole("region", { name: "统一产品与资料目录" })).toHaveTextContent(testAssets[0].name);
+  });
+
   it("renders relative-date seed knowledge separately from real upload counts", async () => {
     render(<KnowledgeHub initialEntries={testKnowledge.map((item) => ({ ...item, updatedAt: "今天" }))} onToast={onToast} />);
     await screen.findByText("还没有真实上传文件");

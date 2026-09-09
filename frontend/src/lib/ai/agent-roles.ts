@@ -82,23 +82,26 @@ export function listAgentRoles(): AgentRole[] {
  * Tool access always comes from one of the reviewed policies above.
  */
 export function loadCowAgentRole(profile: CowAgentProfile): AgentRole {
-  const presetId: AgentRoleId = agentRoleIdSchema.safeParse(profile.id).success
+  const configuredRoleIds = (profile.roleIds ?? []).filter((roleId) => agentRoleIdSchema.safeParse(roleId).success);
+  const fallbackId: AgentRoleId = agentRoleIdSchema.safeParse(profile.id).success
     ? profile.id as AgentRoleId
-    : profile.botType === "weixin_personal"
+    : profile.agentType === "weixin_personal"
       ? "wechat-service"
       : DEFAULT_AGENT_ROLE_ID;
-  const preset = loadAgentRole(presetId);
-  const channelBoundary = profile.botType === "wecom_group"
+  const selectedRoles = (configuredRoleIds.length ? configuredRoleIds : [fallbackId]).map((roleId) => loadAgentRole(roleId));
+  const preset = selectedRoles[0];
+  const channelBoundary = profile.agentType === "wecom_group"
     ? "渠道边界：这是企业微信群聊 Agent。仅处理后端已路由给你的群消息；不要绕过 @、关键词或定时任务开关，也不要声称自己是个人微信联系人。"
-    : profile.botType === "weixin_personal"
+    : profile.agentType === "weixin_personal"
       ? "渠道边界：这是个人微信私聊 Agent。当前 Weixin 通道不支持群聊；不要声称自己已经加入或处理微信群。"
       : "渠道边界：这是通用 Agent，不得声称已经绑定、登录或操作任何微信渠道。";
   const responsibility = profile.description?.trim() || "按用户提供的销售任务进行分析并生成待人工确认的结果。";
+  const enabledRoleNames = selectedRoles.map((role) => role.name).join("、");
   return {
     ...preset,
     id: profile.id,
     name: profile.name,
-    instructions: `你当前运行的是由本机 CowAgent 管理的 Agent“${profile.name}”（ID: ${profile.id}）。\n职责：${responsibility}\n${channelBoundary}\n\n${preset.instructions}`,
-    toolNames: [...preset.toolNames],
+    instructions: `你当前运行的是由本机 CowAgent 管理的 Agent“${profile.name}”（ID: ${profile.id}）。\n职责：${responsibility}\n已启用角色：${enabledRoleNames}\n${channelBoundary}\n\n${selectedRoles.map((role) => role.instructions).join("\n\n")}`,
+    toolNames: [...new Set(selectedRoles.flatMap((role) => role.toolNames))],
   };
 }

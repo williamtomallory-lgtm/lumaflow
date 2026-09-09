@@ -16,7 +16,7 @@ const baseAgents = [
 ];
 
 beforeEach(() => {
-  const created = { id: "north-wechat", name: "北区客服", description: "负责北区客户私聊", enabled: true, workspace: "agents/north-wechat", knowledgeMode: "shared" as const, botType: "weixin_personal" };
+  const created = { id: "north-wechat", name: "北区客服", description: "负责北区客户私聊", enabled: true, workspace: "agents/north-wechat", knowledgeMode: "shared" as const, agentType: "weixin_personal" as const, roleIds: ["wechat-service", "sales-review"] };
   vi.stubGlobal("fetch", vi.fn(async (_url: string, init?: RequestInit) => {
     if (init?.method === "POST") return Response.json({ data: { agents: [...baseAgents, created], defaultAgentId: "default", revision: "r2" } }, { status: 201 });
     return Response.json({ data: { agents: baseAgents, defaultAgentId: "default", revision: "r1" } });
@@ -34,12 +34,13 @@ describe("unified Agent management", () => {
     fireEvent.change(within(dialog).getByLabelText("名称"), { target: { value: "北区客服" } });
     fireEvent.change(within(dialog).getByPlaceholderText("wechat-service"), { target: { value: "north-wechat" } });
     fireEvent.change(within(dialog).getByPlaceholderText("说明这个智能体负责什么、不能做什么…"), { target: { value: "负责北区客户私聊" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /销售复盘 Agent/ }));
     fireEvent.click(within(dialog).getByRole("button", { name: /^\s*创建智能体\s*$/ }));
 
     await waitFor(() => expect(screen.getByRole("tab", { name: /微信 Agent 列表/ })).toHaveAttribute("aria-selected", "true"));
     expect(screen.getAllByText("北区客服")).toHaveLength(2);
     expect(screen.getByTestId("weixin-north-wechat")).toHaveAttribute("data-auto-start", "true");
     const post = (fetch as ReturnType<typeof vi.fn>).mock.calls.find(([, init]) => init?.method === "POST");
-    expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({ id: "north-wechat", name: "北区客服", agentType: "weixin_personal" });
+    expect(JSON.parse(String(post?.[1]?.body))).toMatchObject({ id: "north-wechat", name: "北区客服", agentType: "weixin_personal", roleIds: ["wechat-service", "sales-review"] });
   });
 });

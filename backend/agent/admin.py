@@ -14,7 +14,8 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Mapping, Optional
 
 from agent import team
-from agent.registry import AgentProfile, AgentRegistry
+from agent.capabilities import normalise_role_ids
+from agent.registry import CHANNEL_AGENT_TYPES, AgentProfile, AgentRegistry
 from common.log import logger
 from common.utils import expand_path
 
@@ -332,6 +333,8 @@ class AgentAdminService:
         description: str = None,
         avatar: str = None,
         bot_type: str = None,
+        agent_type: str = None,
+        role_ids: Optional[Iterable[str]] = None,
         skills: Optional[Iterable[str]] = None,
         knowledge: Optional[Iterable[str]] = None,
         knowledge_mode: str = None,
@@ -339,6 +342,10 @@ class AgentAdminService:
     ) -> Dict:
         if knowledge_mode not in (None, "shared", "own"):
             raise AgentAdminError("knowledge mode must be 'shared' or 'own'")
+        if agent_type is not None and agent_type not in CHANNEL_AGENT_TYPES:
+            raise AgentAdminError(
+                "agent type must be 'weixin_personal' or 'wecom_group'"
+            )
         with self._lock:
             settings = self._load()
             registry = self._registry(settings)
@@ -394,6 +401,8 @@ class AgentAdminService:
                     description=(description or "").strip() or None,
                     avatar=(avatar or None),
                     bot_type=(bot_type or "").strip() or None,
+                    agent_type=(agent_type or "").strip() or None,
+                    role_ids=normalise_role_ids(role_ids),
                     skills=(
                         None if skills is None else tuple(self._asset_list(list(skills), "skills"))
                     ),
@@ -434,6 +443,8 @@ class AgentAdminService:
         avatar: str = None,
         model: str = None,
         bot_type: str = None,
+        agent_type: str = None,
+        role_ids=_UNSET,
         skills=_UNSET,
         knowledge=_UNSET,
         revision: str = None,
@@ -460,6 +471,20 @@ class AgentAdminService:
             new_bot_type = current.bot_type if bot_type is None else (bot_type.strip() or None)
             if not new_model:
                 new_bot_type = None
+            new_agent_type = (
+                current.agent_type
+                if agent_type is None
+                else (agent_type.strip() or None)
+            )
+            if new_agent_type is not None and new_agent_type not in CHANNEL_AGENT_TYPES:
+                raise AgentAdminError(
+                    "agent type must be 'weixin_personal' or 'wecom_group'"
+                )
+            new_role_ids = (
+                current.role_ids
+                if role_ids is _UNSET
+                else normalise_role_ids(role_ids)
+            )
             # The default Agent is the one the console's model setting is for. A
             # second answer here would mean two places to change it and no way
             # to tell which is in force, so promotion drops the Agent's own.
@@ -501,6 +526,8 @@ class AgentAdminService:
                 enabled=new_enabled,
                 model=new_model,
                 bot_type=new_bot_type,
+                agent_type=new_agent_type,
+                role_ids=new_role_ids,
                 avatar=new_avatar,
                 skills=new_skills,
                 knowledge=new_knowledge,

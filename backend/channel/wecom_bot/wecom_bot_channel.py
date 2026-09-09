@@ -543,7 +543,7 @@ class WecomBotChannel(ChatChannel):
             try:
                 from agent.registry import get_agent_registry
                 profile = get_agent_registry().get(self.bound_agent_id)
-                if profile.bot_type == "wecom_group" and not is_group:
+                if profile.agent_type == "wecom_group" and not is_group:
                     logger.info("[WecomBot] Ignoring private message for group-only agent '%s'", self.bound_agent_id)
                     return None
             except Exception as exc:

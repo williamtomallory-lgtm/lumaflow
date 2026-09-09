@@ -24,14 +24,14 @@ describe("Agent role policies", () => {
   });
 
   it("uses backend identity and duties without letting a profile grant tools", () => {
-    const personal = loadCowAgentRole({ id: "north-wechat", name: "北区客服", description: "负责北区客户私聊", enabled: true, workspace: "agents/north-wechat", knowledgeMode: "own", botType: "weixin_personal" });
+    const personal = loadCowAgentRole({ id: "north-wechat", name: "北区客服", description: "负责北区客户私聊", enabled: true, workspace: "agents/north-wechat", knowledgeMode: "own", agentType: "weixin_personal" });
     expect(personal.id).toBe("north-wechat");
     expect(personal.name).toBe("北区客服");
     expect(personal.instructions).toContain("负责北区客户私聊");
     expect(personal.instructions).toContain("当前 Weixin 通道不支持群聊");
     expect(personal.toolNames).not.toContain("createQuoteDraft");
 
-    const group = loadCowAgentRole({ id: "group-sales", name: "群销售", description: "只回答库存", enabled: true, workspace: "agents/group-sales", knowledgeMode: "shared", botType: "wecom_group" });
+    const group = loadCowAgentRole({ id: "group-sales", name: "群销售", description: "只回答库存", enabled: true, workspace: "agents/group-sales", knowledgeMode: "shared", agentType: "wecom_group" });
     expect(group.instructions).toContain("企业微信群聊 Agent");
     expect(group.instructions).toContain("不要绕过 @、关键词或定时任务开关");
   });

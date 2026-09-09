@@ -14,12 +14,21 @@ export const KNOWLEDGE_MAX_TOTAL_BYTES = 2 * 1024 * 1024 * 1024;
 export const KNOWLEDGE_MAX_NAME_CHARS = 240;
 
 export const knowledgeCategorySchema = z.enum([
+  "产品档案",
+  "产品图片",
+  "尺寸图",
+  "参数表",
+  "PDF资料",
+  "证书",
+  "案例",
+  "视频",
+  "说明书",
+  "聊天记录",
   "FAQ",
   "销售话术",
   "产品知识",
   "公司知识",
   "政策",
-  "案例",
   "文档解析",
 ]);
 

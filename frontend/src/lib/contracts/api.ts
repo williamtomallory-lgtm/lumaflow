@@ -271,7 +271,7 @@ export const assistantRequestSchema = z.object({
   agentId: cowAgentIdSchema.optional(),
   // Kept for the generic Chat experience and backward-compatible callers.
   agentRoleId: z.enum(["sales-consultant", "wechat-service", "sales-review", "moments-operator"]).optional(),
-  knowledgeDocumentIds: z.array(z.string().uuid()).max(5).refine((ids) => new Set(ids).size === ids.length, "Duplicate document IDs").default([]),
+  knowledgeDocumentIds: z.array(z.string().uuid()).max(50).refine((ids) => new Set(ids).size === ids.length, "Duplicate document IDs").default([]),
 }).refine((body) => !(body.agentId && body.agentRoleId), { message: "Choose either a backend Agent or a built-in role", path: ["agentId"] });
 
 export const assistantHealthResponseSchema = z.object({

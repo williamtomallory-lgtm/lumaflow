@@ -103,11 +103,32 @@ def test_workspace_defaults_to_the_derived_per_agent_location(admin):
 def test_create_agent_persists_strict_channel_type(admin):
     service, root, _ = admin
 
-    created = service.create_agent("group-sales", "Group Sales", bot_type="wecom_group")
+    created = service.create_agent(
+        "group-sales", "Group Sales", agent_type="wecom_group"
+    )
 
-    assert created["bot_type"] == "wecom_group"
+    assert created["agent_type"] == "wecom_group"
     saved = next(item for item in _saved(root)["agents"] if item["id"] == "group-sales")
-    assert saved["bot_type"] == "wecom_group"
+    assert saved["agent_type"] == "wecom_group"
+
+
+def test_create_agent_persists_multiple_roles(admin):
+    service, root, _ = admin
+
+    created = service.create_agent(
+        "wechat-team",
+        "WeChat Team",
+        agent_type="weixin_personal",
+        role_ids=["wechat-service", "sales-consultant", "moments-operator"],
+    )
+
+    assert created["role_ids"] == [
+        "wechat-service",
+        "sales-consultant",
+        "moments-operator",
+    ]
+    saved = next(item for item in _saved(root)["agents"] if item["id"] == "wechat-team")
+    assert saved["role_ids"] == created["role_ids"]
 
 
 def test_clone_copies_persona_but_not_secrets_history_or_nested_agents(admin):

@@ -14,15 +14,20 @@ import {
   FileText,
   FolderOpen,
   LoaderCircle,
+  Plus,
   RefreshCw,
   Search,
   ShieldCheck,
   Sparkles,
   Tag,
   Upload,
+  X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import type { KnowledgeEntry as DemoKnowledgeEntry, KnowledgeCategory } from "@/lib/business";
+import type { Asset, Product } from "@/lib/catalog";
+import { createProductViaApi } from "@/lib/client/backend-api";
+import type { DataSourceKind } from "@/lib/data-snapshot";
 import { knowledgeListResponseSchema, type KnowledgeEntry } from "@/lib/knowledge/contracts";
 import { useModelCatalog } from "@/hooks/use-model-catalog";
 import { useModelHealth } from "@/hooks/use-model-health";
@@ -32,13 +37,27 @@ import { ModelRuntimeControls } from "./model-runtime-controls";
 export type KnowledgeHubProps = {
   /** Seed entries remain visibly marked as demo knowledge and never mix into uploaded counts. */
   initialEntries: Array<KnowledgeEntry | DemoKnowledgeEntry>;
+  products?: Product[];
+  assets?: Array<Asset & { productId: string; productName: string }>;
+  dataSource?: DataSourceKind;
+  initialQuery?: string;
+  onOpenProduct?: (product: Product) => void;
   onToast: (message: string) => void;
 };
 
 type ApiError = { error?: { message?: string } };
 type KnowledgeCategoryFilter = "全部" | KnowledgeCategory;
 
-const categories: Array<KnowledgeCategoryFilter> = ["全部", "FAQ", "销售话术", "产品知识", "公司知识", "政策", "案例", "文档解析"];
+const categories: Array<KnowledgeCategoryFilter> = [
+  "全部", "产品档案", "产品图片", "尺寸图", "参数表", "PDF资料", "证书", "案例", "视频", "说明书", "聊天记录",
+  "FAQ", "销售话术", "产品知识", "公司知识", "政策", "文档解析",
+];
+
+function assetCategory(type: Asset["type"]): KnowledgeCategory {
+  if (type === "图片") return "产品图片";
+  if (type === "PDF") return "PDF资料";
+  return type;
+}
 
 type DemoViewEntry = KnowledgeEntry & { demoContent: string };
 
@@ -98,16 +117,18 @@ function statusLabel(entry: KnowledgeEntry) {
   return "仅归档未理解";
 }
 
-export function KnowledgeHub({ initialEntries, onToast }: KnowledgeHubProps) {
+export function KnowledgeHub({ initialEntries, products = [], assets = [], dataSource = "json", initialQuery = "", onOpenProduct, onToast }: KnowledgeHubProps) {
   const [uploaded, setUploaded] = useState<KnowledgeEntry[]>([]);
   const [summary, setSummary] = useState<ReturnType<typeof emptySummary>>(emptySummary());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState<KnowledgeCategoryFilter>("全部");
   const [selectedId, setSelectedId] = useState<string>();
   const [uploading, setUploading] = useState(false);
   const [retryingId, setRetryingId] = useState<string>();
+  const [catalogProducts, setCatalogProducts] = useState(products);
+  const [creatingProduct, setCreatingProduct] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const { models, modelProfileId, selectedModel, selectModel, loading: loadingModels, error: modelError, refresh: refreshModels } = useModelCatalog();
   const { health, checking: checkingHealth, refresh: refreshHealth } = useModelHealth(modelProfileId);
@@ -151,6 +172,15 @@ export function KnowledgeHub({ initialEntries, onToast }: KnowledgeHubProps) {
       return categoryMatch && queryMatch;
     });
   }, [category, query, uploaded]);
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleProducts = useMemo(() => catalogProducts.filter((product) => {
+    if (category !== "全部" && category !== "产品档案" && category !== "产品知识") return false;
+    return !normalizedQuery || `${product.name} ${product.model} ${product.sku} ${product.category} ${product.family} ${product.power} ${product.material} ${product.dimensions} ${product.scenarios.join(" ")} ${product.supplier}`.toLowerCase().includes(normalizedQuery);
+  }), [catalogProducts, category, normalizedQuery]);
+  const visibleAssets = useMemo(() => assets.filter((asset) => {
+    if (category !== "全部" && assetCategory(asset.type) !== category) return false;
+    return !normalizedQuery || `${asset.name} ${asset.productName} ${asset.type}`.toLowerCase().includes(normalizedQuery);
+  }), [assets, category, normalizedQuery]);
   const maxCategoryCount = Math.max(1, ...summary.byCategory.map((item) => item.count));
   const healthLabel = checkingHealth ? "检测中" : health?.reachable ? health.connectionKind === "protocol-mock" ? "协议模拟" : "已连接" : selectedModel?.configured ? "未连接" : "未配置";
 
@@ -233,6 +263,37 @@ export function KnowledgeHub({ initialEntries, onToast }: KnowledgeHubProps) {
       </section>
 
       <ModelRuntimeControls models={models} modelProfileId={modelProfileId} disabled={uploading || loadingModels} onModelChange={selectModel} />
+      <section className={styles.unifiedToolbarPanel} aria-label="统一知识库筛选">
+        <div className={styles.toolbar}>
+          <div className={styles.searchBox}><Search size={16} /><input aria-label="搜索统一知识库" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索产品、SKU、资料、聊天或文件…" /></div>
+          <input ref={fileRef} aria-label="上传知识文件" type="file" multiple hidden onChange={(event) => void uploadFiles(event.target.files)} />
+          <button className={styles.secondaryButton} onClick={() => void loadKnowledge()} disabled={loading || uploading}><RefreshCw size={15} /> 刷新</button>
+          <button className={styles.primaryButton} onClick={() => fileRef.current?.click()} disabled={uploading}><Upload size={16} /> {uploading ? "上传并分类中…" : "上传任何文件"}</button>
+        </div>
+        <div className={styles.categoryTabs} role="tablist" aria-label="统一知识分类筛选">{categories.map((item) => <button role="tab" aria-selected={category === item} className={category === item ? styles.activeTab : ""} key={item} onClick={() => setCategory(item)}>{item}</button>)}</div>
+      </section>
+      <section className={styles.catalogPanel} aria-label="统一产品与资料目录">
+        <div className={styles.sectionHead}><div><span>STRUCTURED CATALOG</span><h3>产品档案与关联资料</h3></div><div className={styles.catalogHeadActions}><span className={styles.sourceBadge}>{catalogProducts.length} 个产品 · {assets.length} 份资料</span><button className={styles.secondaryButton} onClick={() => setCreatingProduct(true)}><Plus size={14} /> 新增产品档案</button></div></div>
+        <p className={styles.catalogHint}>原“产品中心”和“资料中心”已合并到这里。结构化字段来自后端，上传文件进入下方本地知识库；两者在 Chat-AI 和复盘 Agent 中统一使用。</p>
+        <div className={styles.catalogColumns}>
+          <div className={styles.productKnowledgeList}>
+            <strong>产品档案 · {visibleProducts.length}</strong>
+            {visibleProducts.length ? visibleProducts.map((product) => <button key={product.id} className={styles.productKnowledgeRow} onClick={() => onOpenProduct?.(product)} disabled={!onOpenProduct}>
+              <span style={{ background: product.gradient }}>{product.model}</span>
+              <span><strong>{product.name}</strong><small>{product.sku} · {product.power} · {product.material} · 库存 {product.stock}</small></span>
+              <em>{product.status}</em><ChevronRight size={15} />
+            </button>) : <div className={styles.catalogEmpty}>当前筛选下没有产品档案</div>}
+          </div>
+          <div className={styles.assetKnowledgeList}>
+            <strong>关联资料 · {visibleAssets.length}</strong>
+            {visibleAssets.length ? visibleAssets.map((asset) => <div key={asset.id} className={styles.assetKnowledgeRow}>
+              <span><CatalogFileIcon asset={asset} /></span>
+              <span><strong>{asset.name}</strong><small>{asset.productName} · {asset.size} · {asset.version ?? "v1.0"}</small></span>
+              <em>{assetCategory(asset.type)}</em>
+            </div>) : <div className={styles.catalogEmpty}>当前筛选下没有关联资料</div>}
+          </div>
+        </div>
+      </section>
       <section className={styles.metricGrid} aria-label="知识库真实统计">
         <Metric icon={FolderOpen} label="本地上传文件" value={String(summary.total)} detail={`${formatBytes(summary.storageBytes)} / ${formatBytes(summary.storageLimitBytes)}`} />
         <Metric icon={CheckCircle2} label="已分类文件" value={String(summary.classified)} detail="人工确认后可被智能搜索引用" />
@@ -246,13 +307,7 @@ export function KnowledgeHub({ initialEntries, onToast }: KnowledgeHubProps) {
       </section>
 
       <section className={styles.browserPanel}>
-        <div className={styles.toolbar}>
-          <div className={styles.searchBox}><Search size={16} /><input aria-label="搜索上传知识" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索文件名、标题、标签…" /></div>
-          <input ref={fileRef} aria-label="上传知识文件" type="file" multiple hidden onChange={(event) => void uploadFiles(event.target.files)} />
-          <button className={styles.secondaryButton} onClick={() => void loadKnowledge()} disabled={loading || uploading}><RefreshCw size={15} /> 刷新</button>
-          <button className={styles.primaryButton} onClick={() => fileRef.current?.click()} disabled={uploading}><Upload size={16} /> {uploading ? "上传并分类中…" : "上传任何文件"}</button>
-        </div>
-        <div className={styles.categoryTabs} role="tablist" aria-label="上传知识分类筛选">{categories.map((item) => <button role="tab" aria-selected={category === item} className={category === item ? styles.activeTab : ""} key={item} onClick={() => setCategory(item)}>{item}</button>)}</div>
+        <div className={styles.sectionHead}><div><span>UPLOADED FILES</span><h3>本地上传文件</h3></div><span className={styles.sourceBadge}>{visibleEntries.length} 个结果</span></div>
         {error && <div className={styles.errorBox} role="alert"><CircleAlert size={16} /> {error}<button onClick={() => void loadKnowledge()}>重试</button></div>}
         <div className={styles.browserGrid}>
           <div className={styles.entryList}>
@@ -268,8 +323,43 @@ export function KnowledgeHub({ initialEntries, onToast }: KnowledgeHubProps) {
         <p>这些条目来自项目初始 JSON 数据，只用于展示旧数据迁移前的内容；不会计入上方上传统计，也不会自动混入新文件分类结果。</p>
         <DemoKnowledgeList entries={demoEntries} />
       </section>
+      {creatingProduct && <ProductKnowledgeForm dataSource={dataSource} onClose={() => setCreatingProduct(false)} onCreated={(product) => { setCatalogProducts((current) => [product, ...current]); setCreatingProduct(false); setCategory("产品档案"); setQuery(product.model); onToast(dataSource === "postgres" ? `${product.model} 已写入 PostgreSQL 并加入知识库` : `${product.model} 已加入当前知识库视图；JSON 种子未被修改`); }} />}
     </div>
   );
+}
+
+function ProductKnowledgeForm({ dataSource, onClose, onCreated }: { dataSource: DataSourceKind; onClose: () => void; onCreated: (product: Product) => void }) {
+  const [form, setForm] = useState({ name: "", model: "", sku: "", category: "轨道灯", power: "18W", material: "压铸铝", dimensions: "", stock: "0", price: "299" });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const stock = Math.max(0, Number(form.stock) || 0);
+    const price = Math.max(0, Number(form.price) || 0);
+    const draft: Product = {
+      id: `custom-${Date.now()}`, name: form.name.trim(), model: form.model.trim().toUpperCase(), sku: form.sku.trim().toUpperCase(), category: form.category, family: "自定义产品",
+      status: stock > 10 ? "在售" : stock > 0 ? "低库存" : "预售", power: form.power, lumens: "待补充", colorTemp: "待补充", material: form.material,
+      dimensions: form.dimensions || "待补充", colors: ["待补充"], scenarios: ["待补充"], supplier: "待补充", cost: 0, priceRange: `¥${price}`, moq: 1, stock,
+      leadTime: stock > 0 ? "现货，交期待确认" : "待确认到仓时间", warranty: "待补充", description: "新建产品档案，等待补齐并审核参数。",
+      gradient: "linear-gradient(145deg,#dfe5df,#81968a)", accent: "#a8c2b2", assets: [],
+    };
+    if (!draft.name || !draft.model || !draft.sku) return;
+    setSaving(true); setError("");
+    try {
+      if (dataSource === "postgres") {
+        const { id: _temporaryId, ...input } = draft;
+        void _temporaryId;
+        onCreated(await createProductViaApi(input));
+      } else {
+        onCreated(draft);
+      }
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "保存产品失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+  return <div className={styles.modalLayer} role="dialog" aria-modal="true" aria-label="新增产品档案"><button className={styles.modalScrim} onClick={onClose} aria-label="关闭新增产品" /><form className={styles.productForm} onSubmit={submit}><div className={styles.productFormHead}><div><span>统一知识库</span><h3>新增产品档案</h3></div><button type="button" onClick={onClose} aria-label="关闭"><X size={18} /></button></div><div className={styles.formGrid}><label>产品名称<input required value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} /></label><label>型号<input required value={form.model} onChange={(event) => setForm({ ...form, model: event.target.value })} /></label><label>SKU<input required value={form.sku} onChange={(event) => setForm({ ...form, sku: event.target.value })} /></label><label>品类<input value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value })} /></label><label>功率<input value={form.power} onChange={(event) => setForm({ ...form, power: event.target.value })} /></label><label>材质<input value={form.material} onChange={(event) => setForm({ ...form, material: event.target.value })} /></label><label>尺寸<input value={form.dimensions} onChange={(event) => setForm({ ...form, dimensions: event.target.value })} /></label><label>库存<input type="number" min="0" value={form.stock} onChange={(event) => setForm({ ...form, stock: event.target.value })} /></label><label>参考价格<input type="number" min="0" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} /></label></div>{error && <p className={styles.formError}>{error}</p>}<div className={styles.productFormActions}><button type="button" className={styles.secondaryButton} onClick={onClose}>取消</button><button className={styles.primaryButton} disabled={saving}>{saving ? "保存中…" : "保存产品档案"}</button></div></form></div>;
 }
 
 function emptySummary() {
@@ -297,6 +387,14 @@ function FileTypeIcon({ entry }: { entry: KnowledgeEntry }) {
   if (["zip", "rar", "7z"].includes(entry.extension)) return <FileArchive size={18} />;
   if (entry.hasText) return <FileText size={18} />;
   return <File size={18} />;
+}
+
+function CatalogFileIcon({ asset }: { asset: Asset }) {
+  if (asset.type === "图片" || asset.type === "尺寸图") return <FileImage size={16} />;
+  if (asset.type === "参数表") return <FileSpreadsheet size={16} />;
+  if (asset.type === "PDF") return <FileText size={16} />;
+  if (asset.type === "视频") return <File size={16} />;
+  return <FileArchive size={16} />;
 }
 
 function DemoKnowledgeList({ entries }: { entries: DemoViewEntry[] }) {

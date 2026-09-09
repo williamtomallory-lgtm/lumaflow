@@ -171,6 +171,10 @@ class AgentInitializer:
         agent.agent_id = profile.id
         agent.agent_profile = profile
         agent.workspace_dir = workspace_root
+        # Role composition is stored in the roster and appended after the
+        # rebuilt workspace prompt on every turn, including Weixin messages.
+        from agent.capabilities import build_capability_prompt
+        agent.extra_system_suffix = build_capability_prompt(profile)
 
         # Bind the system-prompt model line to the agent's *effective* model so a
         # per-session override (see AgentLLMModel.set_session_override) shows up

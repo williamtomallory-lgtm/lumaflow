@@ -1,6 +1,22 @@
 import type { Product } from "./catalog";
 
-export type KnowledgeCategory = "FAQ" | "销售话术" | "产品知识" | "公司知识" | "政策" | "案例" | "文档解析";
+export type KnowledgeCategory =
+  | "产品档案"
+  | "产品图片"
+  | "尺寸图"
+  | "参数表"
+  | "PDF资料"
+  | "证书"
+  | "案例"
+  | "视频"
+  | "说明书"
+  | "聊天记录"
+  | "FAQ"
+  | "销售话术"
+  | "产品知识"
+  | "公司知识"
+  | "政策"
+  | "文档解析";
 
 export type KnowledgeEntry = {
   id: string;

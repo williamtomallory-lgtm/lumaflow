@@ -5971,7 +5971,7 @@ class ChannelsHandler:
         if agent_id:
             profile = _agent_admin_service()._registry(_agent_admin_service()._load()).get(agent_id)
             expected_type = "weixin_personal" if channel_name == "weixin" else "wecom_group" if channel_name == "wecom_bot" else ""
-            if expected_type and profile.bot_type != expected_type:
+            if expected_type and profile.agent_type != expected_type:
                 raise ValueError(f"agent '{agent_id}' is not compatible with channel '{channel_name}'")
         inst = upsert_instance(
             conf(),
@@ -6206,7 +6206,7 @@ class WeixinQrHandler:
         if instance_id != expected:
             raise ValueError("Weixin instance_id must match its agent_id")
         profile = _agent_admin_service()._registry(_agent_admin_service()._load()).get(agent_id)
-        if profile.bot_type and profile.bot_type != "weixin_personal":
+        if profile.agent_type and profile.agent_type != "weixin_personal":
             raise ValueError("only a personal Weixin Agent can use Weixin QR login")
         return instance_id, agent_id
 
@@ -7462,7 +7462,7 @@ def _bind_channel_instance(channel_type: str, instance_id: str = "", agent_id: s
     if agent_id:
         profile = _agent_admin_service()._registry(_agent_admin_service()._load()).get(agent_id)
         expected_type = "weixin_personal" if ctype == "weixin" else "wecom_group" if ctype == "wecom_bot" else ""
-        if expected_type and profile.bot_type != expected_type:
+        if expected_type and profile.agent_type != expected_type:
             raise ValueError(f"agent '{agent_id}' is not compatible with channel '{ctype}'")
 
     inst = upsert_instance(
@@ -7600,6 +7600,8 @@ class AgentsHandler:
                     clone_from=body.get("clone_from") or None,
                     avatar=body.get("avatar") or None,
                     bot_type=body.get("bot_type") or None,
+                    agent_type=body.get("agent_type") or None,
+                    role_ids=body.get("role_ids"),
                     description=body.get("description") or None,
                     skills=body.get("skills"),
                     knowledge=body.get("knowledge"),
@@ -7615,8 +7617,11 @@ class AgentsHandler:
                     "description": body.get("description"),
                     "model": body.get("model"),
                     "bot_type": body.get("bot_type"),
+                    "agent_type": body.get("agent_type"),
                     "revision": revision,
                 }
+                if "role_ids" in body:
+                    updates["role_ids"] = body.get("role_ids")
                 if "skills" in body:
                     updates["skills"] = body.get("skills")
                 if "knowledge" in body:

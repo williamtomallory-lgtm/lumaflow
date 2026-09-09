@@ -39,6 +39,64 @@ def test_configured_agents_keep_separate_workspaces(tmp_path):
     assert [profile.id for profile in registry.list()] == ["research", "writer"]
 
 
+def test_legacy_channel_type_is_migrated_away_from_model_provider(tmp_path):
+    registry = AgentRegistry.from_config(
+        {
+            "agents": [
+                {
+                    "id": "sales",
+                    "workspace": str(tmp_path / "sales"),
+                    "bot_type": "weixin_personal",
+                }
+            ]
+        }
+    )
+
+    profile = registry.get("sales")
+    assert profile.agent_type == "weixin_personal"
+    assert profile.bot_type is None
+    assert profile.to_dict()["agent_type"] == "weixin_personal"
+    assert "bot_type" not in profile.to_dict()
+
+
+def test_multiple_lumaflow_roles_round_trip(tmp_path):
+    registry = AgentRegistry.from_config(
+        {
+            "agents": [
+                {
+                    "id": "sales",
+                    "workspace": str(tmp_path / "sales"),
+                    "agent_type": "weixin_personal",
+                    "role_ids": ["wechat-service", "sales-review", "moments-operator"],
+                }
+            ]
+        }
+    )
+
+    profile = registry.get("sales")
+    assert profile.role_ids == (
+        "wechat-service",
+        "sales-review",
+        "moments-operator",
+    )
+    assert profile.to_dict()["role_ids"] == list(profile.role_ids)
+
+
+def test_unknown_lumaflow_role_is_rejected(tmp_path):
+    with pytest.raises(ValueError, match="unknown Agent role"):
+        AgentRegistry.from_config(
+            {
+                "agents": [
+                    {
+                        "id": "sales",
+                        "workspace": str(tmp_path / "sales"),
+                        "role_ids": ["unreviewed-browser-role"],
+                    }
+                ]
+            }
+        )
+
+
 def test_omitted_default_falls_back_to_first_enabled_agent(tmp_path):
     registry = AgentRegistry.from_config(
         {

@@ -14,9 +14,11 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from common.utils import expand_path
+from agent.capabilities import normalise_role_ids
 
 
 _AGENT_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+CHANNEL_AGENT_TYPES = frozenset({"weixin_personal", "wecom_group"})
 
 
 class AgentRegistryError(ValueError):
@@ -35,7 +37,12 @@ class AgentProfile:
     description: Optional[str] = None
     enabled: bool = True
     model: Optional[str] = None
+    # ``bot_type`` is the LLM provider (for example ``custom`` or ``openai``).
+    # The transport role is deliberately separate so a Weixin Agent is never
+    # passed to the model factory as though ``weixin_personal`` were a provider.
     bot_type: Optional[str] = None
+    agent_type: Optional[str] = None
+    role_ids: Optional[Tuple[str, ...]] = None
     avatar: Optional[str] = None
     # Which shared assets this Agent draws on. ``None`` means "all of them",
     # which is what every existing config means and what a new Agent gets;
@@ -61,6 +68,10 @@ class AgentProfile:
             data["model"] = self.model
         if self.bot_type:
             data["bot_type"] = self.bot_type
+        if self.agent_type:
+            data["agent_type"] = self.agent_type
+        if self.role_ids is not None:
+            data["role_ids"] = list(self.role_ids)
         if self.avatar:
             data["avatar"] = self.avatar
         if self.skills is not None:
@@ -133,11 +144,29 @@ def _profile_from_mapping(
 
     model = raw.get("model")
     bot_type = raw.get("bot_type")
-    for key, value in (("model", model), ("bot_type", bot_type)):
+    agent_type = raw.get("agent_type")
+
+    # LumaFlow builds before the channel/model split stored the channel role in
+    # ``bot_type``. Read those profiles safely and emit the new schema on the
+    # next write, without ever handing the legacy value to the model factory.
+    if agent_type is None and bot_type in CHANNEL_AGENT_TYPES:
+        agent_type = bot_type
+        bot_type = None
+
+    for key, value in (
+        ("model", model),
+        ("bot_type", bot_type),
+        ("agent_type", agent_type),
+    ):
         if value is not None and (not isinstance(value, str) or not value.strip()):
             raise AgentRegistryError(
                 f"agent '{agent_id}' {key} must be a non-empty string when set"
             )
+    if agent_type is not None and agent_type.strip() not in CHANNEL_AGENT_TYPES:
+        raise AgentRegistryError(
+            f"agent '{agent_id}' agent_type must be one of: "
+            + ", ".join(sorted(CHANNEL_AGENT_TYPES))
+        )
 
     workspace = raw.get("workspace")
     if workspace is None:
@@ -155,6 +184,8 @@ def _profile_from_mapping(
         enabled=enabled,
         model=model.strip() if isinstance(model, str) else None,
         bot_type=bot_type.strip() if isinstance(bot_type, str) else None,
+        agent_type=agent_type.strip() if isinstance(agent_type, str) else None,
+        role_ids=normalise_role_ids(raw.get("role_ids")),
         avatar=avatar.strip() if isinstance(avatar, str) and avatar.strip() else None,
         skills=_asset_selection(raw, agent_id, "skills"),
         knowledge=_asset_selection(raw, agent_id, "knowledge"),
