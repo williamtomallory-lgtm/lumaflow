@@ -62,3 +62,23 @@ def test_absent_identity_uses_the_default_agent(two_agents, initializer, tmp_pat
 
     assert agent.agent_id == "sales"
     assert _realpath(agent.workspace_dir) == _realpath(tmp_path / "sales")
+
+
+def test_personal_sales_agent_uses_compact_business_prompt_and_read_only_tools(initializer, tmp_path):
+    from agent.capabilities import SALES_TOOL_NAMES
+    registry = AgentRegistry([
+        AgentProfile("wechat-service", "微信客服 Agent", str(tmp_path / "personal"), agent_type="weixin_personal", role_ids=("wechat-service", "sales-review", "moments-operator")),
+    ], default_agent_id="wechat-service")
+    set_agent_registry(registry)
+    try:
+        with identity_scope(agent_id="wechat-service"):
+            agent = initializer.initialize_agent(session_id="business-test")
+        assert agent.sales_runtime
+        assert all(tool.name in SALES_TOOL_NAMES for tool in agent.tools)
+        prompt = agent.get_full_system_prompt()
+        assert "我是 LumaFlow 销售助手" in prompt
+        assert "website_knowledge" in prompt
+        assert "首次初始化引导" not in prompt
+        assert len(prompt) < 3500
+    finally:
+        set_agent_registry(None)

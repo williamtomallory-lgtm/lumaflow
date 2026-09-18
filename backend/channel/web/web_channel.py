@@ -44,6 +44,7 @@ from agent.permission import (
     normalize_mode as permission_normalize_mode,
 )
 from channel.web.openai_api import OpenAIChatCompletionsHandler
+from common.channel_registry import get_channel_manager
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
 VIDEO_EXTENSIONS = {".mp4", ".webm", ".avi", ".mov", ".mkv"}
@@ -5487,9 +5488,7 @@ class ChannelsHandler:
     @staticmethod
     def _get_weixin_login_status() -> str:
         try:
-            import sys
-            app_module = sys.modules.get('__main__') or sys.modules.get('app')
-            mgr = getattr(app_module, '_channel_mgr', None) if app_module else None
+            mgr = get_channel_manager()
             if mgr:
                 ch = mgr.get_channel("weixin")
                 if ch and hasattr(ch, 'login_status'):
@@ -5776,9 +5775,7 @@ class ChannelsHandler:
         if channel_name in active_channels and changed:
             should_restart = True
             try:
-                import sys
-                app_module = sys.modules.get('__main__') or sys.modules.get('app')
-                mgr = getattr(app_module, '_channel_mgr', None) if app_module else None
+                mgr = get_channel_manager()
                 if mgr:
                     threading.Thread(
                         target=mgr.restart,
@@ -5853,7 +5850,7 @@ class ChannelsHandler:
                 import sys
                 app_module = sys.modules.get('__main__') or sys.modules.get('app')
                 clear_fn = getattr(app_module, '_clear_singleton_cache', None) if app_module else None
-                mgr = getattr(app_module, '_channel_mgr', None) if app_module else None
+                mgr = get_channel_manager()
                 if mgr is None:
                     logger.warning(f"[WebChannel] ChannelManager not available, cannot start '{channel_name}'")
                     return
@@ -5901,7 +5898,7 @@ class ChannelsHandler:
             try:
                 import sys
                 app_module = sys.modules.get('__main__') or sys.modules.get('app')
-                mgr = getattr(app_module, '_channel_mgr', None) if app_module else None
+                mgr = get_channel_manager()
                 clear_fn = getattr(app_module, '_clear_singleton_cache', None) if app_module else None
                 if mgr:
                     mgr.stop(channel_name)
@@ -5927,9 +5924,7 @@ class ChannelsHandler:
     # ------------------------------------------------------------------
     @staticmethod
     def _channel_mgr():
-        import sys
-        app_module = sys.modules.get('__main__') or sys.modules.get('app')
-        return getattr(app_module, '_channel_mgr', None) if app_module else None
+        return get_channel_manager()
 
     def _clean_credentials(self, channel_name: str, updates: dict) -> dict:
         """Keep only real, unmasked credential values for this channel type."""
@@ -6183,9 +6178,7 @@ class WeixinQrHandler:
     @staticmethod
     def _get_running_channel(instance_id=""):
         try:
-            import sys
-            app_module = sys.modules.get('__main__') or sys.modules.get('app')
-            mgr = getattr(app_module, '_channel_mgr', None) if app_module else None
+            mgr = get_channel_manager()
             if mgr:
                 return mgr.get_channel(instance_id or "weixin")
         except Exception:
@@ -7474,9 +7467,7 @@ def _bind_channel_instance(channel_type: str, instance_id: str = "", agent_id: s
     )
 
     try:
-        import sys
-        app_module = sys.modules.get("__main__") or sys.modules.get("app")
-        mgr = getattr(app_module, "_channel_mgr", None) if app_module else None
+        mgr = get_channel_manager()
         channel = mgr.get_channel(target_id) if mgr else None
         if channel is not None:
             # Live-update owner + team on the running instance. Empty owner means

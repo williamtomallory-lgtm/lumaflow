@@ -253,6 +253,10 @@ class Agent:
         tools, and runtime info so any change takes effect immediately.
         Falls back to the cached self.system_prompt on error.
         """
+        if getattr(self, "sales_runtime", False):
+            from agent.capabilities import build_sales_system_prompt
+            return build_sales_system_prompt(self.agent_profile, self.runtime_info)
+
         try:
             from agent.prompt import load_context_files, PromptBuilder
 
@@ -764,6 +768,46 @@ class Agent:
         if clear_history:
             with self.messages_lock:
                 self.messages = []
+
+        if getattr(self, "sales_runtime", False):
+            from agent.sales_dispatch import try_sales_dispatch
+            dispatch = try_sales_dispatch(user_message, self.tools)
+            if dispatch is not None:
+                import uuid
+                from types import SimpleNamespace
+
+                call_id = f"sales-{uuid.uuid4().hex}"
+                tool_result = dispatch.tool_result
+                result_text = json.dumps(tool_result.result, ensure_ascii=False) if tool_result is not None else "工具不可用"
+                status = tool_result.status if tool_result is not None else "error"
+                new_messages = [
+                    {"role": "user", "content": [{"type": "text", "text": user_message}]},
+                    {"role": "assistant", "content": [{"type": "tool_use", "id": call_id,
+                                                      "name": dispatch.tool_name, "input": dispatch.arguments}]},
+                    {"role": "user", "content": [{"type": "tool_result", "tool_use_id": call_id,
+                                                 "content": result_text, "is_error": status != "success"}]},
+                    {"role": "assistant", "content": [{"type": "text", "text": dispatch.response}]},
+                ]
+                with self.messages_lock:
+                    self.messages.extend(new_messages)
+                    self._last_run_new_messages = list(new_messages)
+                self.stream_executor = SimpleNamespace(files_to_send=[])
+                if on_event:
+                    for event_type, data in (
+                        ("agent_start", {}),
+                        ("tool_execution_start", {"tool_call_id": call_id, "tool_name": dispatch.tool_name,
+                                                  "arguments": dispatch.arguments}),
+                        ("tool_execution_end", {"tool_call_id": call_id, "tool_name": dispatch.tool_name,
+                                                "status": status, "result": result_text, "execution_time": 0}),
+                        ("message_update", {"delta": dispatch.response}),
+                        ("message_end", {"content": dispatch.response, "tool_calls": []}),
+                        ("agent_end", {"final_response": dispatch.response, "cancelled": False}),
+                    ):
+                        try:
+                            on_event({"type": event_type, "timestamp": time.time(), "data": data})
+                        except Exception:
+                            logger.debug("Sales dispatch event callback failed", exc_info=True)
+                return dispatch.response
 
         # Get model to use
         if not self.model:

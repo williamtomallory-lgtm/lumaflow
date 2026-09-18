@@ -10,6 +10,9 @@ from agent.tools.bash.bash import Bash
 from agent.tools.ls.ls import Ls
 from agent.tools.send.send import Send
 from agent.tools.search_files.search_files import SearchFiles
+from agent.tools.website_knowledge.website_knowledge import WebsiteKnowledge
+from agent.tools.sales_statistics.sales_statistics import SalesStatistics
+from agent.tools.moments_draft.moments_draft import MomentsDraft
 
 # Import memory tools
 from agent.tools.memory.memory_search import MemorySearchTool
@@ -136,6 +139,9 @@ __all__ = [
     'Ls',
     'Send',
     'SearchFiles',
+    'WebsiteKnowledge',
+    'SalesStatistics',
+    'MomentsDraft',
     'MemorySearchTool',
     'MemoryGetTool',
     'EvolutionUndoTool',

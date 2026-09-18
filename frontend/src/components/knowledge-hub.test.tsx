@@ -66,7 +66,9 @@ describe("Knowledge hub", () => {
     const metrics = screen.getByRole("region", { name: "知识库真实统计" });
     expect(within(metrics).getAllByText("0")).toHaveLength(4);
     expect(screen.getByText(/后端尚未返回产品档案/)).toBeInTheDocument();
-    expect(screen.queryByText(/JSON seed|演示知识/)).not.toBeInTheDocument();
+    // The explicit opt-in demo control is visible, but no fixture body is
+    // silently loaded into an empty company library.
+    expect(screen.queryByText(/JSON seed|金桔-739-SAFE|青柠-582-SAFE/)).not.toBeInTheDocument();
   });
 
   it("lets the user confirm a model classification with the backend PATCH", async () => {

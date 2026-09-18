@@ -18,3 +18,4 @@
 .demoArticle>button span{display:flex;align-items:center;gap:4px}
 .demoArticle>p{margin:0;padding:0 10px 10px;color:#756d61;font-size:8px;line-height:1.7;white-space:pre-wrap}
 .demoChevronOpen{transform:rotate(90deg)}
+.agentLibrary{position:relative;padding:18px 20px;font-size:12px}.agentLibrary>label{display:flex;align-items:center;gap:10px;margin:12px 0}.agentLibrary select{max-width:100%;padding:8px;border:1px solid #dce4de;border-radius:8px;background:white}.agentLibrary .toolbar{flex-wrap:wrap;margin:12px 0}.agentLibraryFiles{display:flex;flex-direction:column;gap:8px;max-height:220px;overflow:auto}.agentLibrary .inlineWarning{position:static;margin-top:10px;font-size:12px}

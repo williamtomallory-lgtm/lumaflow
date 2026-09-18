@@ -105,6 +105,8 @@ class AgentInitializer:
         tools = self._load_tools(
             workspace_root, memory_manager, memory_tools, session_id, host_profile.id
         )
+        from agent.capabilities import constrain_sales_tools, uses_sales_runtime
+        tools = constrain_sales_tools(profile, tools)
         
         # Initialize scheduler if needed
         self._initialize_scheduler(
@@ -170,6 +172,7 @@ class AgentInitializer:
 
         agent.agent_id = profile.id
         agent.agent_profile = profile
+        agent.sales_runtime = uses_sales_runtime(profile)
         agent.workspace_dir = workspace_root
         # Role composition is stored in the roster and appended after the
         # rebuilt workspace prompt on every turn, including Weixin messages.

@@ -316,5 +316,7 @@ def test_build_graph_resolves_encoded_and_anchored_links(tmp_path):
     graph = svc.build_graph()
     edges = {(l["source"], l["target"]) for l in graph["links"]}
     assert ("concepts/health.md", "sources/训练记录 07.md") in edges
+    assert all("\\" not in node["id"] for node in graph["nodes"])
+    assert next(node for node in graph["nodes"] if node["id"] == "concepts/health.md")["category"] == "concepts"
     assert ("concepts/health.md", "concepts/rag.md") in edges
     assert len(edges) == 2

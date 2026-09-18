@@ -33,6 +33,7 @@ import { useModelHealth } from "@/hooks/use-model-health";
 import styles from "./knowledge-hub.module.css";
 import { ModelRuntimeControls } from "./model-runtime-controls";
 import { SalesKit } from "./sales-kit";
+import { AgentKnowledgeLibrary } from "./agent-knowledge-library";
 
 export type KnowledgeHubProps = {
   products?: Product[];
@@ -229,6 +230,7 @@ export function KnowledgeHub({ products = [], assets = [], dataSource = "local",
       </section>
 
       <ModelRuntimeControls models={models} modelProfileId={modelProfileId} disabled={uploading || loadingModels} onModelChange={selectModel} />
+      <AgentKnowledgeLibrary documents={uploaded} onToast={onToast} />
       <section className={styles.unifiedToolbarPanel} aria-label="统一知识库筛选">
         <div className={styles.toolbar}>
           <div className={styles.searchBox}><Search size={16} /><input aria-label="搜索统一知识库" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索产品、SKU、资料、聊天或文件…" /></div>

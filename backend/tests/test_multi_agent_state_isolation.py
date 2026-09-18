@@ -247,8 +247,8 @@ def test_tool_manager_instance_is_per_workspace(mcp_workspaces):
 
     assert primary is not research
     assert primary._mcp_json_path() != research._mcp_json_path()
-    assert primary._mcp_json_path().endswith("primary/mcp.json")
-    assert research._mcp_json_path().endswith("research/mcp.json")
+    assert Path(primary._mcp_json_path()).parts[-2:] == ("primary", "mcp.json")
+    assert Path(research._mcp_json_path()).parts[-2:] == ("research", "mcp.json")
 
 
 def test_agents_sharing_one_mcp_json_boot_each_server_once(isolated_registry, monkeypatch):
@@ -380,7 +380,7 @@ def test_mcp_path_stays_put_when_the_ambient_identity_is_gone(mcp_workspaces):
     with identity_scope(agent_id="research"):
         research = ToolManager()
 
-    assert research._mcp_json_path().endswith("research/mcp.json")
+    assert Path(research._mcp_json_path()).parts[-2:] == ("research", "mcp.json")
 
 
 def test_registering_one_agents_config_does_not_move_another(isolated_registry):

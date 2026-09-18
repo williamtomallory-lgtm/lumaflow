@@ -1,0 +1,89 @@
+"""The WeChat sales Agent must not let the model rewrite tool facts."""
+
+import pytest
+
+from agent.protocol.agent import Agent
+from agent.tools.base_tool import BaseTool, ToolResult
+
+
+class _FakeTool(BaseTool):
+    def __init__(self, name, result):
+        self.name = name
+        self.result = result
+        self.calls = []
+
+    def execute(self, args):
+        self.calls.append(args)
+        return self.result
+
+
+def _agent(*tools, sales=True):
+    agent = Agent("test", model=None, tools=list(tools), enable_skills=False)
+    agent.sales_runtime = sales
+    return agent
+
+
+def test_sales_metrics_are_formatted_from_tool_not_model_and_persisted_as_tool_chain():
+    tool = _FakeTool("sales_statistics", ToolResult.success({
+        "metrics": {"newCustomerCount": 5, "quotedCustomerCount": 3, "wonCustomerCount": 1,
+                    "wonAmount": "2975.00", "developmentToWonPercent": "20.00"},
+        "wonCustomerIds": ["SYN-03"],
+        "sources": [{"fileName": "03-sales-results.txt", "collection": "demo"}],
+        "duplicates": [],
+    }))
+    agent = _agent(tool)
+    events = []
+    answer = agent.run_stream("根据销售结果文件按客户ID去重计算成交金额与转化率", on_event=events.append)
+    assert "新开发客户：5" in answer
+    assert "成交客户：1（SYN-03）" in answer
+    assert "20.00%" in answer
+    assert "03-sales-results.txt" in answer
+    assert tool.calls == [{}]
+    assert [item["role"] for item in agent._last_run_new_messages] == ["user", "assistant", "user", "assistant"]
+    assert agent._last_run_new_messages[1]["content"][0]["name"] == "sales_statistics"
+    assert [event["type"] for event in events][-2:] == ["message_end", "agent_end"]
+
+
+def test_moments_body_is_copied_exactly_and_regeneration_selects_variant_two():
+    body = "验收轨道射灯 A，18W、压铸铝，适用于服装店、展厅。黑色、白色外观与3000K、4000K色温可选，便于按空间风格和陈列需求挑选。资料注明2 年质保；实际配置与安装条件请提前核对。"
+    tool = _FakeTool("moments_draft", ToolResult.success({
+        "body": body,
+        "bodyCharacters": len(body),
+        "imageBrief": "干净的服装店灯光场景；标注 AI 示意图",
+        "sources": [{"fileName": "01-products.txt", "collection": "demo"},
+                    {"fileName": "04-moments-brief.txt", "collection": "demo"}],
+        "publicationStatus": "draft_only", "imageStatus": "not_generated",
+    }))
+    agent = _agent(tool)
+    answer = agent.run_stream("请基于网站运营简报，重新生成第二版朋友圈草稿，不要发布")
+    assert answer.split("【正文】\n", 1)[1].split("\n\n【配图建议】", 1)[0] == body
+    assert "未发布朋友圈" in answer
+    assert "尚未生成图片" in answer
+    assert tool.calls == [{"variant": 2}]
+
+
+def test_missing_authorised_source_fails_closed_without_model_hallucination():
+    tool = _FakeTool("sales_statistics", ToolResult.fail("当前 Agent 没有可统计的授权知识文件。"))
+    agent = _agent(tool)
+    answer = agent.run_stream("销售结果按客户ID去重统计客户数")
+    assert "没有可统计的授权知识文件" in answer
+    assert "成交金额：" not in answer
+
+
+def test_general_agent_and_customer_question_keep_normal_model_path():
+    tool = _FakeTool("sales_statistics", ToolResult.success({"metrics": {}}))
+    general = _agent(tool, sales=False)
+    with pytest.raises(ValueError, match="No model available"):
+        general.run_stream("销售结果按客户ID去重统计客户数")
+    sales = _agent(tool)
+    with pytest.raises(ValueError, match="No model available"):
+        sales.run_stream("PTEST-739 有什么材质？")
+    assert not tool.calls
+
+
+def test_user_edited_moments_copy_is_not_overwritten_by_template():
+    tool = _FakeTool("moments_draft", ToolResult.success({"body": "template"}))
+    agent = _agent(tool)
+    with pytest.raises(ValueError, match="No model available"):
+        agent.run_stream("请把我写的朋友圈草稿改短一些，保留我的语气")
+    assert not tool.calls

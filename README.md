@@ -21,6 +21,8 @@ LumaFlow 是一个本地优先的销售知识库与多 Agent 工作台。这个�
 
 所有服务默认只监听 loopback。本机 `.env`、微信凭据、二维码会话、知识文件、数据库、模型权重和运行日志均被 Git 忽略。
 
+已完成本机配置后，可双击根目录 `Start-Local.cmd`，统一启动 Ollama、CowAgent 和 LumaFlow。也可执行 `./Start-Local.ps1 -NoBrowser`。脚本复用已运行的服务，读取 `.local-data/cowagent/config.json`，不下载模型。Agent 数据与微信凭据存放在 `.local-data/cowagent/`；日志写入 `.local-runtime/`。此入口需要已安装依赖和已生成前端生产构建，并不是新电脑的自动安装器。微信持续回复需要电脑开机、联网且未休眠。
+
 ## 启动前端
 
 ```powershell
@@ -62,6 +64,12 @@ cd ..\backend
 本次交付的逐项验收结果记录在 [`docs/verification-2026-09-09.md`](docs/verification-2026-09-09.md)。该报告会区分已通过、需要人工扫码以及当前仍未通过的检查。
 
 个人微信扫码登录表示一个真实微信账号接入一个 Agent 实例，并不会把多个软件 Agent 变成同一微信账号里的多个新好友。企业微信群 Agent 使用独立的企业微信机器人凭据。实际扫码与企业微信应用凭据必须由部署者本人提供。
+
+## 微信销售助手使用网站知识
+
+在知识库的「微信 Agent 使用网站知识库」区域，给指定 Agent 授权已上传的可读文件。四份虚构测试 TXT 可通过显式按钮导入独立演示空间，不进入公司上传资料库。微信 Agent 检索时读取网站当前正文，并标注来源；自我介绍使用「我是 LumaFlow 销售助手」。本机桥接配置及验证见 [`docs/website-wechat-knowledge.md`](docs/website-wechat-knowledge.md)。当前个人微信消息通道未接入朋友圈实际发布操作，文案和配图建议不代表已发布。
+
+本机六场景真实运行及未完成的手机端验收边界见 [`docs/verification-2026-09-17.md`](docs/verification-2026-09-17.md)。
 
 ## 来源与许可证
 

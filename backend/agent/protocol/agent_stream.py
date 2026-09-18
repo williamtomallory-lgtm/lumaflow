@@ -245,6 +245,9 @@ class AgentStreamExecutor:
         self.system_prompt = system_prompt
         # Convert tools list to dict
         self.tools = {tool.name: tool for tool in tools} if isinstance(tools, list) else tools
+        if getattr(agent, "sales_runtime", False):
+            from agent.capabilities import SALES_TOOL_NAMES
+            self.tools = {name: tool for name, tool in (self.tools or {}).items() if name in SALES_TOOL_NAMES}
         self.max_turns = max_turns
         self.on_event = on_event
         self.max_context_turns = max_context_turns
@@ -1360,11 +1363,12 @@ class AgentStreamExecutor:
         # Pull in any MCP tools that finished loading since this turn started.
         # Cheap dict reconciliation (microseconds) — lets the agent pick up
         # newly available MCP tools mid-conversation without a session restart.
-        try:
-            from agent.tools import ToolManager
-            ToolManager().sync_mcp_into_agent(self)
-        except Exception as e:
-            logger.debug(f"[Agent] MCP sync skipped: {e}")
+        if not getattr(self.agent, "sales_runtime", False):
+            try:
+                from agent.tools import ToolManager
+                ToolManager().sync_mcp_into_agent(self)
+            except Exception as e:
+                logger.debug(f"[Agent] MCP sync skipped: {e}")
 
         # Prepare tool definitions. Kept as None (rather than []) when the agent
         # has no tools at all, which is what LLMRequest expects.
