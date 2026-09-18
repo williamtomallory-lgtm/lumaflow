@@ -67,7 +67,45 @@ def _moments_response(data: Mapping[str, Any]) -> str:
     )
 
 
+def _custom_moments_response(data: Mapping[str, Any]) -> str:
+    body = data.get("body")
+    if not isinstance(body, str) or not body:
+        return "没有收到可用的朋友圈正文；未发布。"
+    return (
+        f"【你写的朋友圈正文】\n{body}\n\n"
+        "【状态】未发布。我已按原文接收，不要求 SKU 或运营简报，也没有核实其中的产品声明。"
+        "当前个人微信聊天连接不能操作朋友圈；请在已登录的微信客户端手动发布。"
+    )
+
+
+def _custom_moments_request(message: str) -> Optional[dict]:
+    text = message or ""
+    marker = re.search(r"(?:内容|正文)\s*[:：]", text)
+    if marker:
+        instruction = text[:marker.start()]
+        if "朋友圈" in instruction and any(word in instruction for word in ("发", "发布", "自定义")):
+            return {"body": text[marker.end():].strip()}
+    command = re.match(
+        r"^\s*(?:(?:你)?现在)?(?:请)?(?:直接)?(?:帮我)?(?:发|发布)(?:一条|个)?朋友圈\s*[:：]\s*(.*)$",
+        text, re.S,
+    )
+    if command:
+        return {"body": command.group(1).strip()}
+    command = re.match(r"^\s*自定义朋友圈\s*[:：]\s*(.*)$", text, re.S)
+    if command:
+        return {"body": command.group(1).strip()}
+    compact = re.sub(r"\s+", "", text)
+    if "朋友圈" in compact and any(word in compact for word in ("发", "发布")) and not any(
+        word in compact for word in ("文案", "草稿", "重新生成", "运营简报")
+    ) and len(compact) <= 24:
+        return {"body": ""}
+    return None
+
+
 def _requested_tool(message: str) -> Optional[tuple[str, dict]]:
+    custom = _custom_moments_request(message)
+    if custom is not None:
+        return "moments_custom", custom
     compact = re.sub(r"\s+", "", message or "")
     # An edit of the user's own copy is a creative conversation, not a
     # template regeneration. Keep it in the LLM loop for that distinction.
@@ -97,15 +135,25 @@ def try_sales_dispatch(message: str, tools: Sequence[Any]) -> Optional[SalesDisp
     except Exception:
         available = False
     if not available:
+        if tool_name == "moments_custom":
+            return SalesDispatch(tool_name, arguments, None, "自定义朋友圈模式暂不可用；未发布，且不需要 SKU 或运营简报。")
         return SalesDispatch(tool_name, arguments, None, "当前网站知识桥接尚未就绪；无法核对授权文件，不会编造结果。")
     try:
         result = tool.execute(arguments)
     except Exception:
+        if tool_name == "moments_custom":
+            return SalesDispatch(tool_name, arguments, None, "自定义朋友圈模式处理失败；未发布，请重试。")
         return SalesDispatch(tool_name, arguments, None, "授权资料工具执行失败；不会编造结果，请检查本机服务。")
     if result.status != "success":
+        if tool_name == "moments_custom":
+            return SalesDispatch(tool_name, arguments, result, f"{result.result} 未发布朋友圈。")
         return SalesDispatch(tool_name, arguments, result, f"无法根据当前授权文件完成请求：{result.result}")
     data = result.result
     if not isinstance(data, Mapping):
         return SalesDispatch(tool_name, arguments, result, "工具返回格式无效；不会猜测产品或销售数据。")
-    response = _statistics_response(data) if tool_name == "sales_statistics" else _moments_response(data)
+    response = (
+        _statistics_response(data) if tool_name == "sales_statistics"
+        else _custom_moments_response(data) if tool_name == "moments_custom"
+        else _moments_response(data)
+    )
     return SalesDispatch(tool_name, arguments, result, response)

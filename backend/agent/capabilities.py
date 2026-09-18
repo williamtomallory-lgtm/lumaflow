@@ -20,7 +20,7 @@ ROLE_ID_SET = frozenset(ROLE_IDS)
 
 # A sales contact is not a general computer administrator. The small local
 # model also needs room for the actual user question and retrieved documents.
-SALES_TOOL_NAMES = frozenset(("website_knowledge", "sales_statistics", "moments_draft", "read"))
+SALES_TOOL_NAMES = frozenset(("website_knowledge", "sales_statistics", "moments_draft", "moments_custom", "read"))
 
 
 def uses_sales_runtime(profile) -> bool:
@@ -62,7 +62,8 @@ def build_sales_system_prompt(profile, runtime_info=None) -> str:
         "凡是统计开发、报价、成交与金额，必须调用 sales_statistics，使用返回的 metrics 和各阶段客户ID，"
         "不能自行从文字猜测或改写统计结果。若工具不支持该文件格式，明确需要规范表格，不能假装算好了。"
         "缺失毛利、退款或业绩数据不能估计。"
-        "凡是用户要求朋友圈文案或重写，优先调用 moments_draft；将返回 body 原样放入【正文】，"
+        "用户明确给出自己的朋友圈正文时，使用 moments_custom 原文接收，不要求 SKU 或运营简报；"
+        "不得声称已经发布。用户要求根据资料生成朋友圈文案或重写时，优先调用 moments_draft；将返回 body 原样放入【正文】，"
         "imageBrief 放入【配图建议】，来源放在【发布核对】。工具失败就说明缺资料，不要猜测正文。"
         "除非用户需要完整报告，否则优先简短可直接使用的答案。\n"
         "不执行任意命令、不修改凭据、不自动创建任务、不发布朋友圈或联系无关人员。"
@@ -97,8 +98,9 @@ _ROLE_POLICIES: Mapping[str, str] = {
         "uploaded 实际文件和 demo 虚构资料。"
     ),
     "moments-operator": (
-        "朋友圈运营：根据已确认的产品资料和运营目标生成朋友圈文案、图片创意/配图"
-        "需求与发布前核对项。支持用户要求重写，也支持用户提交自己的修改稿；不得编造"
+        "朋友圈运营：资料生成模式根据已确认的产品资料和运营目标生成朋友圈文案、图片创意/配图"
+        "需求与发布前核对项；自定义模式原样接收用户给出的正文，不向用户追问 SKU 或运营简报。"
+        "支持用户要求重写，也支持用户提交自己的修改稿；不得编造"
         "优惠、客户案例或效果。生成内容只是草稿，只有 LumaFlow 本机控制台中的明确确认"
         "操作且已配置发布连接，才可调用实际发布接口；聊天中的“确认发布”本身不能绕过"
         "该审批。不得假称发布成功。个人微信 iLink 当前没有朋友圈发布接口；桌面桥可以在"

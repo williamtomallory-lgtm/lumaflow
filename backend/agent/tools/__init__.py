@@ -13,6 +13,7 @@ from agent.tools.search_files.search_files import SearchFiles
 from agent.tools.website_knowledge.website_knowledge import WebsiteKnowledge
 from agent.tools.sales_statistics.sales_statistics import SalesStatistics
 from agent.tools.moments_draft.moments_draft import MomentsDraft
+from agent.tools.moments_custom.moments_custom import MomentsCustom
 
 # Import memory tools
 from agent.tools.memory.memory_search import MemorySearchTool
@@ -142,6 +143,7 @@ __all__ = [
     'WebsiteKnowledge',
     'SalesStatistics',
     'MomentsDraft',
+    'MomentsCustom',
     'MemorySearchTool',
     'MemoryGetTool',
     'EvolutionUndoTool',

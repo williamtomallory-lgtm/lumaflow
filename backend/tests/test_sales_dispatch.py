@@ -4,6 +4,7 @@ import pytest
 
 from agent.protocol.agent import Agent
 from agent.tools.base_tool import BaseTool, ToolResult
+from agent.tools.moments_custom import MomentsCustom
 
 
 class _FakeTool(BaseTool):
@@ -87,3 +88,41 @@ def test_user_edited_moments_copy_is_not_overwritten_by_template():
     with pytest.raises(ValueError, match="No model available"):
         agent.run_stream("请把我写的朋友圈草稿改短一些，保留我的语气")
     assert not tool.calls
+
+
+@pytest.mark.parametrize("message", [
+    "你现在帮我发个朋友圈 内容：test",
+    "直接发布朋友圈：test",
+    "自定义朋友圈：test",
+])
+def test_user_authored_moments_are_preserved_without_sku_or_brief(message):
+    template = _FakeTool("moments_draft", ToolResult.fail("缺少 SKU"))
+    agent = _agent(MomentsCustom(), template)
+    answer = agent.run_stream(message)
+    assert "【你写的朋友圈正文】\ntest" in answer
+    assert "未发布" in answer
+    assert "不要求 SKU 或运营简报" in answer
+    assert "LUM-3000" not in answer
+    assert not template.calls
+    assert agent._last_run_new_messages[1]["content"][0]["name"] == "moments_custom"
+
+
+def test_custom_moments_preserve_multiline_body_and_fail_closed_without_text():
+    agent = _agent(MomentsCustom())
+    answer = agent.run_stream("发朋友圈 内容：第一行\n第二行 #新品")
+    assert "第一行\n第二行 #新品" in answer
+    assert "未发布" in answer
+    empty = agent.run_stream("帮我发朋友圈")
+    assert "请在“内容：”后填写" in empty
+    assert "未发布朋友圈" in empty
+
+
+def test_custom_moments_tool_never_claims_or_executes_publication():
+    tool = MomentsCustom()
+    result = tool.execute({"body": "这只是我写的内容"})
+    assert result.status == "success"
+    assert result.result["body"] == "这只是我写的内容"
+    assert result.result["source"] == "user_authored"
+    assert result.result["publicationStatus"] == "not_published_transport_unavailable"
+    assert tool.execute({"body": " "}).status == "error"
+    assert tool.execute({"body": "x", "agentId": "other"}).status == "error"

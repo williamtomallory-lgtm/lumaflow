@@ -78,6 +78,7 @@ try {
     { id: "sales-dedup", prompt: "根据网站授权的销售结果文件，按客户ID去重计算：新开发客户数、已报价客户数、成交客户数、成交金额、开发到成交转化率。不要重复统计 SYN-03；没数据的毛利不要估计。注明文件名。", required: [/5/, /3/, /1/, /2[,]?975/, /20(?:\.0{1,2})?\s*%|20(?:\.0{1,2})?\s*％/, /03-sales-results\.txt/, /虚构|演示/], retrieve: true },
     { id: "moments-draft", prompt: "请读取网站授权的运营简报与产品文件，生成一条80至120字的朋友圈文案（包含18W、材质、可选色温及质保），以及配图建议。禁止写价格、库存、未经证实的色温可调或当天发货，不要直接发布。按【正文】【配图建议】【发布核对】三段输出，注明文件来源。", required: [/04-moments-brief\.txt/, /18\s*W/i, /配图|图片/, /示意图|实拍|AI/, /草稿|未发布|待确认|核对/], retrieve: true },
     { id: "moments-regenerate", prompt: "请基于网站授权的产品资料和运营简报，重新生成第二版朋友圈草稿（moments_draft 的 variant=2）。正文只放工具生成的80至120字，不要改写产品事实；另列配图建议与来源核对。不要发布。", required: [/04-moments-brief\.txt/, /18\s*W/i, /配图|图片/, /草稿|未发布|待确认|核对/], retrieve: true },
+    { id: "moments-custom", prompt: "你现在帮我发个朋友圈 内容：test", required: [/【你写的朋友圈正文】\s*test/, /未发布/, /不要求 SKU 或运营简报/], retrieve: false },
   ];
   if (onlyCase) assert.ok(cases.some((item) => item.id === onlyCase), `Unknown verification case: ${onlyCase}`);
   for (const item of cases) {
@@ -90,12 +91,16 @@ try {
       const tool = item.id === "sales-dedup" ? "sales_statistics" : item.id.startsWith("moments-") ? "moments_draft" : "website_knowledge";
       checks.push({ expected: `actual ${tool} tool execution`, passed: result.tools.includes(tool) });
     }
+    if (item.id === "moments-custom") {
+      checks.push({ expected: "actual moments_custom tool execution", passed: result.tools.includes("moments_custom") });
+      checks.push({ expected: "no source-backed draft or publish claim", passed: !result.tools.includes("moments_draft") && !/已发布朋友圈|发布成功/.test(result.text) });
+    }
     if (item.id === "sales-dedup") {
       checks.push({ expected: "actual deterministic metrics: 5/3/1/2975/20", passed: result.statistics.some((metrics) =>
         metrics.newCustomerCount === 5 && metrics.quotedCustomerCount === 3 && metrics.wonCustomerCount === 1 &&
         Number(metrics.wonAmount) === 2975 && Number(metrics.developmentToWonPercent) === 20) });
     }
-    if (item.id.startsWith("moments-")) {
+    if (item.id === "moments-draft" || item.id === "moments-regenerate") {
       const body = (result.text.match(/【正文】\s*([\s\S]+?)(?=【|$)/)?.[1] ?? "")
         .replace(/（来源[:：][\s\S]*$/u, "").replace(/\(来源[:：][\s\S]*$/u, "").trim();
       const length = [...body.replace(/\s/g, "")].length;
