@@ -68,18 +68,38 @@ def _moments_response(data: Mapping[str, Any]) -> str:
 
 
 def _custom_moments_response(data: Mapping[str, Any]) -> str:
+    if data.get("mode") == "help":
+        return (
+            "朋友圈有两个模式：\n"
+            "1. 资料模式：先在 LumaFlow 知识库上传并授权产品资料和运营简报，"
+            "然后发“朋友圈资料模式：生成文案”。我会从授权材料生成待核对草稿。\n"
+            "2. 自定义模式：发“自定义模式(你写好的原文)”，全角括号也可以。"
+            "括号里的内容原样接收，没有字数、SKU、简报或配图要求。\n"
+            "当前个人微信连接不能直接发布朋友圈；以上两种模式都不会显示虚假的发布成功。"
+        )
     body = data.get("body")
     if not isinstance(body, str) or not body:
         return "没有收到可用的朋友圈正文；未发布。"
     return (
         f"【你写的朋友圈正文】\n{body}\n\n"
-        "【状态】未发布。我已按原文接收，不要求 SKU 或运营简报，也没有核实其中的产品声明。"
+        "【状态】未发布。自定义模式按原文接收，没有字数、SKU、运营简报或配图要求。"
         "当前个人微信聊天连接不能操作朋友圈；请在已登录的微信客户端手动发布。"
     )
 
 
 def _custom_moments_request(message: str) -> Optional[dict]:
     text = message or ""
+    if re.fullmatch(r"\s*朋友圈模式\s*[?？]?\s*", text):
+        return {"action": "help"}
+    parenthesised = re.fullmatch(
+        r"\s*(?:朋友圈)?自定义模式\s*(?:\((?P<ascii>[\s\S]*)\)|（(?P<wide>[\s\S]*)）)\s*",
+        text,
+    )
+    if parenthesised:
+        return {"body": parenthesised.group("ascii") if parenthesised.group("ascii") is not None else parenthesised.group("wide")}
+    custom_mode = re.match(r"^\s*(?:朋友圈)?自定义模式\s*(?:(?:内容|正文)\s*)?[:：]\s*(.*)$", text, re.S)
+    if custom_mode:
+        return {"body": custom_mode.group(1).strip()}
     marker = re.search(r"(?:内容|正文)\s*[:：]", text)
     if marker:
         instruction = text[:marker.start()]
@@ -107,6 +127,9 @@ def _requested_tool(message: str) -> Optional[tuple[str, dict]]:
     if custom is not None:
         return "moments_custom", custom
     compact = re.sub(r"\s+", "", message or "")
+    if compact.startswith(("朋友圈资料模式", "资料模式生成朋友圈", "资料模式朋友圈")):
+        variant = 2 if "第二版" in compact or "重新生成" in compact else 3 if "第三版" in compact else 1
+        return "moments_draft", {"variant": variant}
     # An edit of the user's own copy is a creative conversation, not a
     # template regeneration. Keep it in the LLM loop for that distinction.
     if "朋友圈" in compact and any(word in compact for word in ("文案", "草稿", "重新生成", "运营简报")):

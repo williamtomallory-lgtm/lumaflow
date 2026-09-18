@@ -65,12 +65,12 @@ export const AGENT_ROLES: readonly AgentRoleOption[] = [
     id: "moments-operator",
     name: "朋友圈运营 Agent",
     eyebrow: "内容运营",
-    description: "支持根据授权资料生成文案，或直接接收你写好的朋友圈正文；当前个人微信连接不能自动发布。",
-    useCases: ["资料生成", "自定义原文", "发布前核对"],
+    description: "两种模式：资料模式从已授权材料生成文案；自定义模式原样接收你写的正文。当前个人微信不能自动发布。",
+    useCases: ["资料模式", "自定义模式", "发布前核对"],
     inputLabel: "运营目标、产品素材或自写正文",
-    inputPlaceholder: "输入运营目标；若已有完整正文，可发送“发朋友圈 内容：你的原文”…",
+    inputPlaceholder: "在微信发“朋友圈模式”查看用法；自定义可直接发“自定义模式(你的原文)”…",
     outputLabel: "运营计划与文案",
-    outputHint: "自写正文无需 SKU 或运营简报。当前个人微信仅能返回可复制内容，未接通自动发布。",
+    outputHint: "自定义模式只需把内容放进括号，无字数、SKU、简报或配图要求；当前未接通自动发布。",
   },
 ] as const;
 

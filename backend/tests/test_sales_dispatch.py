@@ -94,6 +94,9 @@ def test_user_edited_moments_copy_is_not_overwritten_by_template():
     "你现在帮我发个朋友圈 内容：test",
     "直接发布朋友圈：test",
     "自定义朋友圈：test",
+    "朋友圈自定义模式 内容：test",
+    "自定义模式(test)",
+    "自定义模式（test）",
 ])
 def test_user_authored_moments_are_preserved_without_sku_or_brief(message):
     template = _FakeTool("moments_draft", ToolResult.fail("缺少 SKU"))
@@ -101,7 +104,7 @@ def test_user_authored_moments_are_preserved_without_sku_or_brief(message):
     answer = agent.run_stream(message)
     assert "【你写的朋友圈正文】\ntest" in answer
     assert "未发布" in answer
-    assert "不要求 SKU 或运营简报" in answer
+    assert "没有字数、SKU、运营简报或配图要求" in answer
     assert "LUM-3000" not in answer
     assert not template.calls
     assert agent._last_run_new_messages[1]["content"][0]["name"] == "moments_custom"
@@ -113,7 +116,7 @@ def test_custom_moments_preserve_multiline_body_and_fail_closed_without_text():
     assert "第一行\n第二行 #新品" in answer
     assert "未发布" in answer
     empty = agent.run_stream("帮我发朋友圈")
-    assert "请在“内容：”后填写" in empty
+    assert "请把要发的原文放进" in empty
     assert "未发布朋友圈" in empty
 
 
@@ -126,3 +129,27 @@ def test_custom_moments_tool_never_claims_or_executes_publication():
     assert result.result["publicationStatus"] == "not_published_transport_unavailable"
     assert tool.execute({"body": " "}).status == "error"
     assert tool.execute({"body": "x", "agentId": "other"}).status == "error"
+    assert tool.execute({"body": " Test\n"}).result["body"] == " Test\n"
+
+
+def test_explicit_two_mode_menu_and_source_backed_mode_are_distinct():
+    custom = MomentsCustom()
+    draft = _FakeTool("moments_draft", ToolResult.success({
+        "body": "只依据授权文件生成的测试文案",
+        "imageBrief": "仅为配图建议",
+        "sources": [{"fileName": "04-moments-brief.txt", "collection": "demo"}],
+    }))
+    agent = _agent(custom, draft)
+    menu = agent.run_stream("朋友圈模式")
+    assert "1. 资料模式" in menu
+    assert "2. 自定义模式" in menu
+    assert "自定义模式(你写好的原文)" in menu
+    assert "不能直接发布朋友圈" in menu
+    assert not draft.calls
+    source_answer = agent.run_stream("朋友圈资料模式：生成文案")
+    assert "只依据授权文件生成的测试文案" in source_answer
+    assert "04-moments-brief.txt" in source_answer
+    assert draft.calls == [{"variant": 1}]
+    custom_answer = agent.run_stream("朋友圈自定义模式 内容：我的原文")
+    assert "我的原文" in custom_answer
+    assert draft.calls == [{"variant": 1}]
